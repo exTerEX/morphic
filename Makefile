@@ -12,7 +12,7 @@ help:
 	@echo "  clean     - Remove build artifacts"
 
 install:
-	uv sync --dev
+	uv sync --dev --all-extras
 
 run: install
 	uv run morphic
