@@ -4,9 +4,19 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'pyproject.toml'
+      - '.github/workflows/documentation.yml'
   pull_request:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'pyproject.toml'
+      - '.github/workflows/documentation.yml'
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:

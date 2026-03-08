@@ -3,8 +3,20 @@ name: Continuous integration
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/CI.yml'
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/CI.yml'
 
 jobs:
   test:
@@ -17,6 +29,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install ffmpeg (Ubuntu)
+      if: startsWith(matrix.os, 'ubuntu')
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+    - name: Install ffmpeg (macOS)
+      if: startsWith(matrix.os, 'macos')
+      run: brew install ffmpeg
+
+    - name: Install ffmpeg (Windows)
+      if: startsWith(matrix.os, 'windows')
+      run: choco install ffmpeg -y
 
     - name: Set up UV
       uses: astral-sh/setup-uv@v5
@@ -35,6 +59,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install ffmpeg
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
     - name: Set up UV
       uses: astral-sh/setup-uv@v5
