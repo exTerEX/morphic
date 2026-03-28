@@ -22,9 +22,14 @@ from morphic.dupfinder.videos import (
 class TestVideoInfoToDict:
     def test_to_dict_keys(self) -> None:
         info = VideoInfo(
-            path="/v.mp4", duration=120.5, fps=30.0,
-            frame_count=3615, width=1920, height=1080,
-            file_size=50000000, average_hash="abc123",
+            path="/v.mp4",
+            duration=120.5,
+            fps=30.0,
+            frame_count=3615,
+            width=1920,
+            height=1080,
+            file_size=50000000,
+            average_hash="abc123",
         )
         d = info.to_dict()
         assert d["path"] == "/v.mp4"
@@ -56,8 +61,12 @@ class TestVideoInfoToDict:
 
     def test_custom_values(self) -> None:
         info = VideoInfo(
-            path="/v.mp4", width=3840, height=2160,
-            duration=120.5, fps=60.0, file_size=10000000,
+            path="/v.mp4",
+            width=3840,
+            height=2160,
+            duration=120.5,
+            fps=60.0,
+            file_size=10000000,
         )
         assert info.duration == 120.5
         assert info.fps == 60.0
@@ -195,10 +204,14 @@ class TestVideoDuplicateFinder:
 
         finder.video_infos = {
             "/a.mp4": VideoInfo(
-                path="/a.mp4", frame_hashes=[h], file_size=1000,
+                path="/a.mp4",
+                frame_hashes=[h],
+                file_size=1000,
             ),
             "/b.mp4": VideoInfo(
-                path="/b.mp4", frame_hashes=[h], file_size=1000,
+                path="/b.mp4",
+                frame_hashes=[h],
+                file_size=1000,
             ),
         }
         groups = finder.find_duplicates()
@@ -207,7 +220,9 @@ class TestVideoDuplicateFinder:
     def test_find_duplicates_cpu(self) -> None:
         hasher = VideoHasher(hash_size=8)
         finder = VideoDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.9,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.9,
         )
 
         frame = np.zeros((64, 64, 3), dtype=np.uint8)
@@ -215,13 +230,19 @@ class TestVideoDuplicateFinder:
 
         finder.video_infos = {
             "/a.mp4": VideoInfo(
-                path="/a.mp4", frame_hashes=[h], file_size=1000,
+                path="/a.mp4",
+                frame_hashes=[h],
+                file_size=1000,
             ),
             "/b.mp4": VideoInfo(
-                path="/b.mp4", frame_hashes=[h], file_size=1000,
+                path="/b.mp4",
+                frame_hashes=[h],
+                file_size=1000,
             ),
             "/c.mp4": VideoInfo(
-                path="/c.mp4", frame_hashes=[h], file_size=1000,
+                path="/c.mp4",
+                frame_hashes=[h],
+                file_size=1000,
             ),
         }
 
@@ -231,7 +252,9 @@ class TestVideoDuplicateFinder:
     def test_find_duplicates_cpu_no_match(self) -> None:
         hasher = VideoHasher(hash_size=8)
         finder = VideoDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.99,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.99,
         )
 
         frames = [
@@ -242,7 +265,9 @@ class TestVideoDuplicateFinder:
         for i, frame in enumerate(frames):
             h = hasher.compute_frame_hash(frame)
             finder.video_infos[f"/v{i}.mp4"] = VideoInfo(
-                path=f"/v{i}.mp4", frame_hashes=[h], file_size=1000,
+                path=f"/v{i}.mp4",
+                frame_hashes=[h],
+                file_size=1000,
             )
 
         groups = finder._find_duplicates_cpu(list(finder.video_infos.keys()))
@@ -302,9 +327,12 @@ def _noop_ctx():
     yield
 
 
-_PATCH_GETSIZE = patch("morphic.dupfinder.videos.os.path.getsize", return_value=1024)
+_PATCH_GETSIZE = patch(
+    "morphic.dupfinder.videos.os.path.getsize", return_value=1024
+)
 _PATCH_SUPPRESS = patch(
-    "morphic.dupfinder.videos.suppress_stderr", side_effect=_noop_ctx,
+    "morphic.dupfinder.videos.suppress_stderr",
+    side_effect=_noop_ctx,
 )
 
 
@@ -314,7 +342,11 @@ class TestVideoExtraction:
     @patch("morphic.dupfinder.videos.cv2.cvtColor")
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_extract_frames_success(
-        self, mock_vc_cls, mock_cvt, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        mock_cvt,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -344,7 +376,10 @@ class TestVideoExtraction:
     @_PATCH_GETSIZE
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_extract_frames_not_opened(
-        self, mock_vc_cls, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -358,7 +393,10 @@ class TestVideoExtraction:
     @_PATCH_GETSIZE
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_extract_frames_zero_frame_count(
-        self, mock_vc_cls, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -380,7 +418,11 @@ class TestVideoExtraction:
     @patch("morphic.dupfinder.videos.cv2.cvtColor")
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_extract_frames_read_fails(
-        self, mock_vc_cls, mock_cvt, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        mock_cvt,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -404,7 +446,11 @@ class TestComputeVideoHashes:
     @patch("morphic.dupfinder.videos.cv2.cvtColor")
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_full_pipeline(
-        self, mock_vc_cls, mock_cvt, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        mock_cvt,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -429,7 +475,10 @@ class TestComputeVideoHashes:
     @_PATCH_GETSIZE
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_no_frames_extracted(
-        self, mock_vc_cls, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -447,7 +496,11 @@ class TestVideoProcessing:
     @patch("morphic.dupfinder.videos.cv2.cvtColor")
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_process_videos_with_mocked_cv2(
-        self, mock_vc_cls, mock_cvt, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        mock_cvt,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap
@@ -463,7 +516,9 @@ class TestVideoProcessing:
         mock_cvt.return_value = frame
 
         finder = VideoDuplicateFinder(
-            use_gpu=False, hash_size=8, num_workers=1,
+            use_gpu=False,
+            hash_size=8,
+            num_workers=1,
         )
         result = finder.process_videos(["/test/a.mp4", "/test/b.mp4"])
         assert len(result) >= 0
@@ -473,7 +528,11 @@ class TestVideoProcessing:
     @patch("morphic.dupfinder.videos.cv2.cvtColor")
     @patch("morphic.dupfinder.videos.cv2.VideoCapture")
     def test_duration_calculation(
-        self, mock_vc_cls, mock_cvt, _mock_gs, _mock_ss,
+        self,
+        mock_vc_cls,
+        mock_cvt,
+        _mock_gs,
+        _mock_ss,
     ) -> None:
         mock_cap = MagicMock()
         mock_vc_cls.return_value = mock_cap

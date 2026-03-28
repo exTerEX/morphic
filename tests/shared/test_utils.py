@@ -195,5 +195,6 @@ class TestFindFilesByExtension:
 class TestSuppressStderr:
     def test_suppresses(self) -> None:
         import sys
+
         with suppress_stderr():
             sys.stderr.write("suppressed\n")

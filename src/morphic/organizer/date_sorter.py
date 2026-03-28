@@ -11,7 +11,6 @@ import logging
 import os
 import shutil
 from datetime import datetime
-from pathlib import Path
 
 import piexif
 
@@ -54,7 +53,8 @@ def get_file_date(path: str) -> datetime:
                     val = val.strip().rstrip("\x00")
                     if val and val != "0000:00:00 00:00:00":
                         return datetime.strptime(
-                            val, "%Y:%m:%d %H:%M:%S",
+                            val,
+                            "%Y:%m:%d %H:%M:%S",
                         )
     except Exception:
         pass
@@ -118,12 +118,14 @@ def plan_sort(
         dest_dir = os.path.join(base, sub_path)
         dest_file = os.path.join(dest_dir, os.path.basename(path))
 
-        plan.append({
-            "source": path,
-            "destination": dest_file,
-            "date": dt.isoformat(),
-            "date_formatted": dt.strftime("%Y-%m-%d %H:%M:%S"),
-        })
+        plan.append(
+            {
+                "source": path,
+                "destination": dest_file,
+                "date": dt.isoformat(),
+                "date_formatted": dt.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     return plan
 
@@ -163,19 +165,23 @@ def execute_sort(
             else:
                 shutil.copy2(src, dest)
             completed += 1
-            results.append({
-                "source": src,
-                "destination": dest,
-                "status": "ok",
-            })
+            results.append(
+                {
+                    "source": src,
+                    "destination": dest,
+                    "status": "ok",
+                }
+            )
         except Exception as e:
             errors += 1
-            results.append({
-                "source": src,
-                "destination": dest,
-                "status": "error",
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "source": src,
+                    "destination": dest,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
 
     return {
         "completed": completed,

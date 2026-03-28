@@ -11,6 +11,7 @@ import logging
 import os
 import platform
 import subprocess
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,16 @@ def open_native_folder_dialog(
     4. **osascript** — macOS
     5. **powershell** — Windows
     """
+    # In test mode we prefer a headless preset path to avoid GUI dialog popups.
+    test_folder = os.environ.get("MORPHIC_TEST_FOLDER")
+    if test_folder and os.path.isdir(test_folder):
+        return test_folder
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        asset_folder = Path(__file__).resolve().parents[2] / "assets" / "test"
+        if asset_folder.exists():
+            return str(asset_folder)
+
     initial_dir = initial_dir or str(os.path.expanduser("~"))
 
     result = _try_tkinter(initial_dir)
@@ -87,11 +98,15 @@ def _try_zenity(initial_dir: str) -> str | None:
     try:
         result = subprocess.run(
             [
-                "zenity", "--file-selection", "--directory",
+                "zenity",
+                "--file-selection",
+                "--directory",
                 f"--filename={initial_dir}/",
                 "--title=Select folder to scan",
             ],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
@@ -104,10 +119,15 @@ def _try_kdialog(initial_dir: str) -> str | None:
     try:
         result = subprocess.run(
             [
-                "kdialog", "--getexistingdirectory", initial_dir,
-                "--title", "Select folder to scan",
+                "kdialog",
+                "--getexistingdirectory",
+                initial_dir,
+                "--title",
+                "Select folder to scan",
             ],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
@@ -120,13 +140,15 @@ def _try_osascript(initial_dir: str) -> str | None:
     try:
         script = (
             f'set defaultDir to POSIX file "{initial_dir}"\n'
-            f'set chosenDir to choose folder with prompt '
+            f"set chosenDir to choose folder with prompt "
             f'"Select folder to scan" default location defaultDir\n'
-            f'return POSIX path of chosenDir'
+            f"return POSIX path of chosenDir"
         )
         result = subprocess.run(
             ["osascript", "-e", script],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip().rstrip("/")
@@ -148,7 +170,9 @@ def _try_powershell(initial_dir: str) -> str | None:
         )
         result = subprocess.run(
             ["powershell", "-Command", script],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
 from PIL import Image
 
 from morphic.organizer.renamer import execute_rename, plan_rename
@@ -57,7 +56,9 @@ class TestPlanRename:
     def test_output_folder(self, tmp_path) -> None:
         _make_jpeg(str(tmp_path / "photo.jpg"))
         out = str(tmp_path / "renamed")
-        plan = plan_rename(str(tmp_path), template="{seq}{ext}", output_folder=out)
+        plan = plan_rename(
+            str(tmp_path), template="{seq}{ext}", output_folder=out
+        )
         assert plan[0]["destination"].startswith(out)
 
 

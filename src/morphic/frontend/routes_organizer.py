@@ -59,9 +59,11 @@ def api_execute():
 
     ok = execute_job(job_id)
     if not ok:
-        return jsonify({
-            "error": "Job not found or not in 'planned' state",
-        }), 404
+        return jsonify(
+            {
+                "error": "Job not found or not in 'planned' state",
+            }
+        ), 404
 
     return jsonify({"status": "executing", "job_id": job_id}), 202
 

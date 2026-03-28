@@ -37,8 +37,8 @@
             <div class="form-group">
                 <label for="convFolder">Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="convFolder" placeholder="Click to browse or type a path…" value="{{ initial_folder }}" onclick="toggleBrowser('converter')" />
-                    <button class="btn btn-ghost btn-sm" onclick="toggleBrowser('converter')">📁 Browse</button>
+                    <input type="text" id="convFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('converter')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="convBrowser">
                     <div class="fb-header">
@@ -113,16 +113,22 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
                 Convert to:
                 <select id="convBatchTarget" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
-                    <option value=".jpg">.jpg</option>
-                    <option value=".png">.png</option>
-                    <option value=".webp">.webp</option>
-                    <option value=".bmp">.bmp</option>
-                    <option value=".mp4">.mp4</option>
-                    <option value=".mkv">.mkv</option>
-                    <option value=".webm">.webm</option>
-                    <option value=".mov">.mov</option>
+                    <option value="" disabled selected>Loading available targets…</option>
                 </select>
             </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
+                Show:
+                <select id="convBatchMode" onchange="convUpdateBatchTargets()" title="Choose target set behavior" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+                    <option value="intersection">Common only (safer)</option>
+                    <option value="union">All compatible</option>
+                </select>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
+                AV1 CRF:
+                <input id="convAv1Crf" type="range" min="18" max="48" step="1" value="32" oninput="document.getElementById('convAv1CrfValue').textContent = this.value;" style="margin-left:4px;">
+                <span id="convAv1CrfValue" style="font-weight:600;min-width:30px;text-align:center;">32</span>
+            </label>
+            <span id="convBatchModeHint" style="font-size:12px;color:var(--text-dim);">Intersection = formats supported by each selected file; Union = any selected file</span>
             <button class="btn btn-primary btn-sm" id="convBatchBtn" onclick="convConvertBatch()">🔄 Convert Selected</button>
             <button class="btn btn-danger btn-sm" onclick="convDeleteBatch()">🗑️ Delete Selected</button>
         </div>
@@ -145,8 +151,8 @@
             <div class="form-group">
                 <label for="dupFolder">Folder to scan</label>
                 <div class="folder-input-row">
-                    <input type="text" id="dupFolder" placeholder="Click to browse or type a path…" value="{{ initial_folder }}" onclick="toggleBrowser('dupfinder')" />
-                    <button class="btn btn-ghost btn-sm" onclick="toggleBrowser('dupfinder')">📁 Browse</button>
+                    <input type="text" id="dupFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('dupfinder')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="dupBrowser">
                     <div class="fb-header">
@@ -238,8 +244,8 @@
             <div class="form-group">
                 <label for="inspFolder">Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="inspFolder" placeholder="Click to browse or type a path…" value="{{ initial_folder }}" onclick="toggleBrowser('inspector')" />
-                    <button class="btn btn-ghost btn-sm" onclick="toggleBrowser('inspector')">📁 Browse</button>
+                    <input type="text" id="inspFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('inspector')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="inspBrowser">
                     <div class="fb-header">
@@ -303,8 +309,8 @@
             <div class="form-group">
                 <label for="resFolder">Source Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="resFolder" placeholder="Click to browse or type a path…" value="{{ initial_folder }}" onclick="toggleBrowser('resizer')" />
-                    <button class="btn btn-ghost btn-sm" onclick="toggleBrowser('resizer')">📁 Browse</button>
+                    <input type="text" id="resFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('resizer')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="resBrowser">
                     <div class="fb-header">
@@ -393,8 +399,8 @@
             <div class="form-group">
                 <label for="orgFolder">Source Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="orgFolder" placeholder="Click to browse or type a path…" value="{{ initial_folder }}" onclick="toggleBrowser('organizer')" />
-                    <button class="btn btn-ghost btn-sm" onclick="toggleBrowser('organizer')">📁 Browse</button>
+                    <input type="text" id="orgFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('organizer')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="orgBrowser">
                     <div class="fb-header">

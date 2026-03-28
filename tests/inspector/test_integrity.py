@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 
-import pytest
 from PIL import Image
 
 from morphic.inspector.integrity import check_files, check_image, check_video
@@ -63,7 +61,9 @@ class TestCheckFiles:
 
         results = check_files(str(tmp_path))
         # Should have at least the 2 images
-        image_results = [r for r in results if r["path"].endswith((".jpg", ".png"))]
+        image_results = [
+            r for r in results if r["path"].endswith((".jpg", ".png"))
+        ]
         assert len(image_results) >= 2
 
     def test_empty_folder(self, tmp_path) -> None:

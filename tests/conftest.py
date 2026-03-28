@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
 from morphic.frontend.app import create_app
 
+ASSETS_TEST_DIR = Path(__file__).resolve().parents[1] / "assets" / "test"
+
 
 @pytest.fixture()
-def app():
+def app(monkeypatch):
     """Create a Flask app for testing."""
-    application = create_app(initial_folder="/tmp")
+    if ASSETS_TEST_DIR.exists():
+        monkeypatch.setenv("MORPHIC_TEST_FOLDER", str(ASSETS_TEST_DIR))
+
+    initial_folder = (
+        str(ASSETS_TEST_DIR) if ASSETS_TEST_DIR.exists() else "/tmp"
+    )
+    application = create_app(initial_folder=initial_folder)
     application.config["TESTING"] = True
     return application
 
@@ -26,6 +36,7 @@ def client(app):
 @pytest.fixture()
 def tmp_media(tmp_path):
     """Create a temp directory with sample image/video files."""
+
     # Create images
     for name in ["photo.jpg", "image.png", "pic.tif"]:
         img = Image.new("RGB", (10, 10), color="red")

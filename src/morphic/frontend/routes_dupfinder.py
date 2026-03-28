@@ -41,9 +41,11 @@ def api_start_scan():
     if not folder or not os.path.isdir(folder):
         return jsonify({"error": f"Invalid folder: {folder}"}), 400
     if scan_type not in ("images", "videos", "both"):
-        return jsonify({
-            "error": "type must be images, videos, or both",
-        }), 400
+        return jsonify(
+            {
+                "error": "type must be images, videos, or both",
+            }
+        ), 400
 
     job_id = start_job(
         folder=folder,
@@ -69,16 +71,18 @@ def api_scan_status(job_id: str):
         end = job.finished_at if job.finished_at else time.time()
         elapsed = end - job.started_at
 
-    return jsonify({
-        "id": job.id,
-        "status": job.status,
-        "progress": job.progress,
-        "message": job.message,
-        "error": job.error,
-        "total_files_found": job.total_files_found,
-        "total_files_processed": job.total_files_processed,
-        "elapsed_seconds": round(elapsed, 1),
-    })
+    return jsonify(
+        {
+            "id": job.id,
+            "status": job.status,
+            "progress": job.progress,
+            "message": job.message,
+            "error": job.error,
+            "total_files_found": job.total_files_found,
+            "total_files_processed": job.total_files_processed,
+            "elapsed_seconds": round(elapsed, 1),
+        }
+    )
 
 
 @bp.route("/scan/<job_id>/results")
@@ -91,12 +95,14 @@ def api_scan_results(job_id: str):
     if job.status not in ("done", "error"):
         return jsonify({"error": "Scan not finished yet"}), 409
 
-    return jsonify({
-        "image_groups": job.image_groups,
-        "video_groups": job.video_groups,
-        "space_savings": job.space_savings,
-        "space_savings_formatted": format_file_size(job.space_savings),
-    })
+    return jsonify(
+        {
+            "image_groups": job.image_groups,
+            "video_groups": job.video_groups,
+            "space_savings": job.space_savings,
+            "space_savings_formatted": format_file_size(job.space_savings),
+        }
+    )
 
 
 # ── Delete ─────────────────────────────────────────────────────────────────
@@ -124,25 +130,33 @@ def api_delete_files():
             file_size = os.path.getsize(file_path)
             os.remove(file_path)
             total_freed += file_size
-            results.append({
-                "path": file_path,
-                "status": "deleted",
-                "size_freed": file_size,
-            })
+            results.append(
+                {
+                    "path": file_path,
+                    "status": "deleted",
+                    "size_freed": file_size,
+                }
+            )
         except PermissionError:
-            results.append({
-                "path": file_path,
-                "status": "permission_denied",
-            })
+            results.append(
+                {
+                    "path": file_path,
+                    "status": "permission_denied",
+                }
+            )
         except Exception as e:
-            results.append({
-                "path": file_path,
-                "status": "error",
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "path": file_path,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
 
-    return jsonify({
-        "results": results,
-        "total_freed": total_freed,
-        "total_freed_formatted": format_file_size(total_freed),
-    })
+    return jsonify(
+        {
+            "results": results,
+            "total_freed": total_freed,
+            "total_freed_formatted": format_file_size(total_freed),
+        }
+    )

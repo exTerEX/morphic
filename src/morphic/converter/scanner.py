@@ -78,14 +78,16 @@ def scan_folder(
             targets = get_compatible_targets(full)
 
             summary[ext] = summary.get(ext, 0) + 1
-            files.append({
-                "path": full,
-                "name": fname,
-                "ext": ext,
-                "size": size,
-                "type": ftype,
-                "targets": targets,
-            })
+            files.append(
+                {
+                    "path": full,
+                    "name": fname,
+                    "ext": ext,
+                    "size": size,
+                    "type": ftype,
+                    "targets": targets,
+                }
+            )
 
     sorted_summary = dict(sorted(summary.items(), key=lambda x: -x[1]))
 

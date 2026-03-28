@@ -43,7 +43,8 @@ class TestTryZenity:
     @patch("morphic.shared.file_browser.subprocess.run")
     def test_success(self, mock_run) -> None:
         mock_run.return_value = MagicMock(
-            returncode=0, stdout="/selected/folder\n",
+            returncode=0,
+            stdout="/selected/folder\n",
         )
         result = _try_zenity("/home/user")
         assert result == "/selected/folder"
@@ -67,7 +68,8 @@ class TestTryKdialog:
     @patch("morphic.shared.file_browser.subprocess.run")
     def test_success(self, mock_run) -> None:
         mock_run.return_value = MagicMock(
-            returncode=0, stdout="/selected/folder\n",
+            returncode=0,
+            stdout="/selected/folder\n",
         )
         result = _try_kdialog("/home/user")
         assert result == "/selected/folder"
@@ -91,7 +93,8 @@ class TestTryOsascript:
     @patch("morphic.shared.file_browser.subprocess.run")
     def test_success(self, mock_run) -> None:
         mock_run.return_value = MagicMock(
-            returncode=0, stdout="/Users/test/folder/\n",
+            returncode=0,
+            stdout="/Users/test/folder/\n",
         )
         result = _try_osascript("/Users/test")
         assert result == "/Users/test/folder"
@@ -115,7 +118,8 @@ class TestTryPowershell:
     @patch("morphic.shared.file_browser.subprocess.run")
     def test_success(self, mock_run) -> None:
         mock_run.return_value = MagicMock(
-            returncode=0, stdout="C:\\Users\\test\\folder\n",
+            returncode=0,
+            stdout="C:\\Users\\test\\folder\n",
         )
         result = _try_powershell("C:\\Users\\test")
         assert result == "C:\\Users\\test\\folder"
@@ -159,7 +163,11 @@ class TestOpenNativeFolderDialog:
         return_value="/kde_dir",
     )
     def test_linux_kdialog_fallback(
-        self, mock_k, mock_z, mock_sys, mock_tk,
+        self,
+        mock_k,
+        mock_z,
+        mock_sys,
+        mock_tk,
     ) -> None:
         result = open_native_folder_dialog()
         assert result == "/kde_dir"
@@ -198,7 +206,11 @@ class TestOpenNativeFolderDialog:
     @patch("morphic.shared.file_browser._try_zenity", return_value=None)
     @patch("morphic.shared.file_browser._try_kdialog", return_value=None)
     def test_all_fail_returns_none(
-        self, mock_k, mock_z, mock_sys, mock_tk,
+        self,
+        mock_k,
+        mock_z,
+        mock_sys,
+        mock_tk,
     ) -> None:
         result = open_native_folder_dialog()
         assert result is None

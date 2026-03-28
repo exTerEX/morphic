@@ -13,21 +13,56 @@ from __future__ import annotations
 
 IMAGE_EXTENSIONS: frozenset[str] = frozenset(
     {
-        ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp",
-        ".webp", ".gif", ".ico", ".heic", ".heif", ".avif",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".tif",
+        ".tiff",
+        ".bmp",
+        ".webp",
+        ".gif",
+        ".ico",
+        ".heic",
+        ".heif",
+        ".avif",
         # Extra formats from dupfinder (raw / vector)
-        ".svg", ".raw", ".cr2", ".nef", ".arw",
-        ".dng", ".orf", ".rw2", ".pef", ".srw",
+        ".svg",
+        ".raw",
+        ".cr2",
+        ".nef",
+        ".arw",
+        ".dng",
+        ".orf",
+        ".rw2",
+        ".pef",
+        ".srw",
     }
 )
 
 VIDEO_EXTENSIONS: frozenset[str] = frozenset(
     {
-        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv",
-        ".wmv", ".m4v", ".mpeg", ".mpg", ".3gp", ".ts",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".mkv",
+        ".webm",
+        ".flv",
+        ".wmv",
+        ".m4v",
+        ".mpeg",
+        ".mpg",
+        ".3gp",
+        ".ts",
         # Extra formats from dupfinder
-        ".ogv", ".mts", ".m2ts", ".vob",
-        ".divx", ".xvid", ".asf", ".rm", ".rmvb",
+        ".ogv",
+        ".mts",
+        ".m2ts",
+        ".vob",
+        ".divx",
+        ".xvid",
+        ".asf",
+        ".rm",
+        ".rmvb",
     }
 )
 
@@ -38,21 +73,38 @@ ALL_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 EXCLUDED_FOLDERS: frozenset[str] = frozenset(
     {
         # Windows
-        "$recycle.bin", "$recycle", "recycler", "recycled",
-        "system volume information", "windows", "appdata",
+        "$recycle.bin",
+        "$recycle",
+        "recycler",
+        "recycled",
+        "system volume information",
+        "windows",
+        "appdata",
         # macOS
-        ".trash", ".trashes", ".spotlight-v100",
-        ".fseventsd", ".ds_store",
+        ".trash",
+        ".trashes",
+        ".spotlight-v100",
+        ".fseventsd",
+        ".ds_store",
         # Linux
-        "lost+found", "trash",
+        "lost+found",
+        "trash",
         # Thumbnails
-        ".thumbnails", ".thumb", "thumbs",
+        ".thumbnails",
+        ".thumb",
+        "thumbs",
         # NAS
         "@eadir",
         # Version control
-        ".git", ".svn", ".hg",
+        ".git",
+        ".svn",
+        ".hg",
         # Development
-        "__pycache__", ".cache", "node_modules", ".venv", "venv",
+        "__pycache__",
+        ".cache",
+        "node_modules",
+        ".venv",
+        "venv",
     }
 )
 

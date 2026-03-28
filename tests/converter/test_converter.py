@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
+from morphic.converter import converter
 from morphic.converter.converter import (
     _ffmpeg_available,
     convert_file,
@@ -127,7 +128,9 @@ class TestConvertVideo:
 
     @patch("morphic.converter.converter.subprocess.run")
     @patch("morphic.converter.converter._ffmpeg_available", return_value=True)
-    def test_successful_conversion(self, mock_ffmpeg, mock_run, tmp_path) -> None:
+    def test_successful_conversion(
+        self, mock_ffmpeg, mock_run, tmp_path
+    ) -> None:
         src = tmp_path / "test.mp4"
         src.write_bytes(b"\x00" * 100)
 
@@ -147,7 +150,8 @@ class TestConvertVideo:
         src.write_bytes(b"\x00" * 100)
 
         mock_run.return_value = MagicMock(
-            returncode=1, stderr="conversion error",
+            returncode=1,
+            stderr="conversion error",
         )
 
         with pytest.raises(RuntimeError, match="ffmpeg error"):
@@ -228,7 +232,7 @@ class TestConvertFile:
         src.write_bytes(b"\x00" * 100)
         mock_convert.return_value = str(tmp_path / "test.avi")
 
-        dest = convert_file(str(src), ".avi")
+        _ = convert_file(str(src), ".avi")
         mock_convert.assert_called_once()
 
     def test_unsupported_type(self, tmp_path) -> None:
@@ -244,3 +248,33 @@ class TestConvertFile:
 
         dest = convert_file(str(src), "png")
         assert dest.endswith(".png")
+
+
+class TestConvertHelperFunctions:
+    def test_get_video_encoder_fallbacks(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            converter, "_is_torch_cuda_available", lambda: True
+        )
+        monkeypatch.setattr(converter, "_ffmpeg_has_hwaccel", lambda x: True)
+        monkeypatch.setattr(
+            converter, "_ffmpeg_has_encoder", lambda e: e == "h264_nvenc"
+        )
+
+        encoder, hw, out = converter._get_video_encoder(".mp4")
+        assert encoder == "h264_nvenc"
+        assert hw is True
+        assert out == "mp4"
+
+        monkeypatch.setattr(converter, "_ffmpeg_has_encoder", lambda e: False)
+        encoder, hw, out = converter._get_video_encoder(".avi")
+        assert encoder == "mpeg4"
+        assert hw is False
+
+        monkeypatch.setattr(
+            converter,
+            "_ffmpeg_has_encoder",
+            lambda e: e in ("libsvtav1", "libaom-av1"),
+        )
+        encoder, hw, out = converter._get_video_encoder(".webm-av1")
+        assert out == "webm"
+        assert encoder in ("libsvtav1", "libaom-av1", "libvpx-vp9")

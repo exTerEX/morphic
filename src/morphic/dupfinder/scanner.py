@@ -125,9 +125,7 @@ def _run_scan(job: ScanJob) -> None:
                 finder.process_images(image_files)
                 job.image_infos = finder.image_infos
                 job.total_files_processed += len(finder.image_infos)
-                job.progress = (
-                    0.4 if job.scan_type == "both" else 0.7
-                )
+                job.progress = 0.4 if job.scan_type == "both" else 0.7
                 job.message = (
                     f"Processed {len(finder.image_infos)} images. "
                     "Finding duplicates..."
@@ -136,11 +134,10 @@ def _run_scan(job: ScanJob) -> None:
                 job.status = "comparing"
                 groups = finder.find_duplicates()
                 job.image_groups = _format_image_groups(
-                    groups, finder.image_infos,
+                    groups,
+                    finder.image_infos,
                 )
-                job.progress = (
-                    0.5 if job.scan_type == "both" else 0.95
-                )
+                job.progress = 0.5 if job.scan_type == "both" else 0.95
 
         # ── Video Scan ─────────────────────────────────────────────
         if job.scan_type in ("videos", "both"):
@@ -157,18 +154,14 @@ def _run_scan(job: ScanJob) -> None:
             job.message = (
                 f"Found {len(video_files)} videos. Processing hashes..."
             )
-            job.progress = (
-                0.6 if job.scan_type == "both" else 0.1
-            )
+            job.progress = 0.6 if job.scan_type == "both" else 0.1
 
             if video_files:
                 job.status = "processing"
                 vfinder.process_videos(video_files)
                 job.video_infos = vfinder.video_infos
                 job.total_files_processed += len(vfinder.video_infos)
-                job.progress = (
-                    0.8 if job.scan_type == "both" else 0.7
-                )
+                job.progress = 0.8 if job.scan_type == "both" else 0.7
                 job.message = (
                     f"Processed {len(vfinder.video_infos)} videos. "
                     "Finding duplicates..."
@@ -177,7 +170,8 @@ def _run_scan(job: ScanJob) -> None:
                 job.status = "comparing"
                 groups = vfinder.find_duplicates()
                 job.video_groups = _format_video_groups(
-                    groups, vfinder.video_infos,
+                    groups,
+                    vfinder.video_infos,
                 )
                 job.progress = 0.95
 
@@ -215,29 +209,34 @@ def _format_image_groups(
         formatted = []
         sorted_group = sorted(
             group,
-            key=lambda x: infos.get(
-                x[0], ImageInfo(path=""),
-            ).file_size,
+            key=lambda x: (
+                infos.get(
+                    x[0],
+                    ImageInfo(path=""),
+                ).file_size
+            ),
             reverse=True,
         )
         for path, similarity in sorted_group:
             info = infos.get(path)
             if info:
-                formatted.append({
-                    "path": path,
-                    "filename": os.path.basename(path),
-                    "directory": os.path.dirname(path),
-                    "width": info.width,
-                    "height": info.height,
-                    "resolution": f"{info.width}x{info.height}",
-                    "format": info.format or "Unknown",
-                    "file_size": info.file_size,
-                    "file_size_formatted": format_file_size(
-                        info.file_size,
-                    ),
-                    "similarity": round(similarity * 100, 1),
-                    "type": "image",
-                })
+                formatted.append(
+                    {
+                        "path": path,
+                        "filename": os.path.basename(path),
+                        "directory": os.path.dirname(path),
+                        "width": info.width,
+                        "height": info.height,
+                        "resolution": f"{info.width}x{info.height}",
+                        "format": info.format or "Unknown",
+                        "file_size": info.file_size,
+                        "file_size_formatted": format_file_size(
+                            info.file_size,
+                        ),
+                        "similarity": round(similarity * 100, 1),
+                        "type": "image",
+                    }
+                )
         if len(formatted) > 1:
             result.append(formatted)
     return result
@@ -253,33 +252,38 @@ def _format_video_groups(
         formatted = []
         sorted_group = sorted(
             group,
-            key=lambda x: infos.get(
-                x[0], VideoInfo(path=""),
-            ).file_size,
+            key=lambda x: (
+                infos.get(
+                    x[0],
+                    VideoInfo(path=""),
+                ).file_size
+            ),
             reverse=True,
         )
         for path, similarity in sorted_group:
             info = infos.get(path)
             if info:
-                formatted.append({
-                    "path": path,
-                    "filename": os.path.basename(path),
-                    "directory": os.path.dirname(path),
-                    "width": info.width,
-                    "height": info.height,
-                    "resolution": f"{info.width}x{info.height}",
-                    "duration": info.duration,
-                    "duration_formatted": format_duration(
-                        info.duration,
-                    ),
-                    "fps": round(info.fps, 1),
-                    "file_size": info.file_size,
-                    "file_size_formatted": format_file_size(
-                        info.file_size,
-                    ),
-                    "similarity": round(similarity * 100, 1),
-                    "type": "video",
-                })
+                formatted.append(
+                    {
+                        "path": path,
+                        "filename": os.path.basename(path),
+                        "directory": os.path.dirname(path),
+                        "width": info.width,
+                        "height": info.height,
+                        "resolution": f"{info.width}x{info.height}",
+                        "duration": info.duration,
+                        "duration_formatted": format_duration(
+                            info.duration,
+                        ),
+                        "fps": round(info.fps, 1),
+                        "file_size": info.file_size,
+                        "file_size_formatted": format_file_size(
+                            info.file_size,
+                        ),
+                        "similarity": round(similarity * 100, 1),
+                        "type": "video",
+                    }
+                )
         if len(formatted) > 1:
             result.append(formatted)
     return result

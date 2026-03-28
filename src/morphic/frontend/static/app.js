@@ -5,15 +5,78 @@
 // =====================================================================
 
 let activeTab = 'converter';
+let lastSelectedFolder = '';
 
 // Converter state
 let convScanData = null;        // last scan result
 let convFilterType = 'both';    // images|videos|both
 let convFilterExt = null;       // filter by specific extension
 let convSelectedFiles = [];     // files selected for conversion
+let convAvailableTargets = [];  // all targets currently available for batch conversion
+let convAv1Available = false;   // AV1 support from ffmpeg
+let convLastFailedFiles = new Set(); // set of last conversion failures
+let convBatchMode = 'intersection';    // union|intersection
+let convAv1Crf = 32;
 let convJobId = null;
 let convPollTimer = null;
 let showFullPaths = false;
+
+async function convLoadFormats() {
+    try {
+        const savedMode = localStorage.getItem('convBatchMode');
+        if (savedMode === 'union' || savedMode === 'intersection') {
+            convBatchMode = savedMode;
+        }
+
+        const savedAv1Crf = Number(localStorage.getItem('convAv1Crf'));
+        if (!Number.isNaN(savedAv1Crf) && savedAv1Crf >= 10 && savedAv1Crf <= 63) {
+            convAv1Crf = savedAv1Crf;
+        }
+
+        const modeSelect = document.getElementById('convBatchMode');
+        if (modeSelect) {
+            modeSelect.value = convBatchMode;
+        }
+
+        const av1CrfInput = document.getElementById('convAv1Crf');
+        if (av1CrfInput) {
+            av1CrfInput.value = convAv1Crf;
+            document.getElementById('convAv1CrfValue').textContent = convAv1Crf;
+        }
+
+        const resp = await fetch('/api/converter/formats');
+        const data = await resp.json();
+
+        // Augment with system diagnostic info for AV1 support
+        try {
+            const sysResp = await fetch('/api/system_info');
+            const sysInfo = await sysResp.json();
+            const ffenc = sysInfo.ffmpeg && sysInfo.ffmpeg.encoders || [];
+            convAv1Available = ffenc.some(e => e.includes('av1_nvenc') || e.includes('libsvtav1') || e.includes('libaom-av1'));
+        } catch (e) {
+            convAv1Available = false;
+        }
+
+        const targets = new Set();
+        if (data.image) {
+            Object.values(data.image).flat().forEach(t => targets.add(t));
+        }
+        if (data.video) {
+            Object.values(data.video).flat().forEach(t => targets.add(t));
+        }
+
+        if (convAv1Available) {
+            targets.add('.mp4-av1');
+            targets.add('.mkv-av1');
+            targets.add('.webm-av1');
+        }
+
+        convAvailableTargets = [...targets].sort();
+        convSetBatchTargets(convAvailableTargets);
+    } catch (e) {
+        console.error('Failed to load converter formats:', e);
+    }
+}
 
 // Dupfinder state
 let dupJobId = null;
@@ -59,6 +122,82 @@ const _browserPrefixes = {
 
 function _bp(tab) { return _browserPrefixes[tab] || tab; }
 
+function _setLastFolder(path) {
+    lastSelectedFolder = path;
+    try {
+        localStorage.setItem('morphic_last_folder', path);
+    } catch (e) {
+        // ignore
+    }
+}
+
+function _storeFolder(tab, path) {
+    _setLastFolder(path);
+    try {
+        localStorage.setItem(`morphic_folder_${tab}`, path);
+    } catch (e) {
+        // Ignore storage errors in privacy modes
+    }
+}
+
+function _loadFolder(tab) {
+    try {
+        return localStorage.getItem(`morphic_folder_${tab}`) || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+function _loadLastFolder() {
+    try {
+        return localStorage.getItem('morphic_last_folder') || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+
+function loadFolderPreferences() {
+    lastSelectedFolder = _loadLastFolder();
+    const tabs = ['converter', 'dupfinder', 'inspector', 'resizer', 'organizer'];
+    for (const tab of tabs) {
+        const input = document.getElementById(_bp(tab) + 'Folder');
+        if (!input) continue;
+
+        let saved = _loadFolder(tab);
+        if (!saved) {
+            saved = lastSelectedFolder || '';
+        }
+
+        if (saved) {
+            input.value = saved;
+            _setLastFolder(saved);
+        }
+
+        let indicator = input.closest('.form-group')?.querySelector('.folder-saved-indicator');
+        if (!indicator && input.closest('.form-group')) {
+            indicator = document.createElement('span');
+            indicator.className = 'folder-saved-indicator';
+            indicator.style.marginLeft = '10px';
+            indicator.style.fontSize = '12px';
+            indicator.style.color = 'var(--success, #06c)';
+            input.closest('.form-group').appendChild(indicator);
+        }
+
+        if (indicator) {
+            indicator.textContent = saved ? '✅ saved' : '';
+        }
+
+        input.addEventListener('input', () => {
+            const value = input.value.trim();
+            _storeFolder(tab, value);
+            if (indicator) {
+                indicator.textContent = value ? '✅ saved' : '';
+            }
+        });
+    }
+}
+
 function toggleBrowser(tab) {
     const browser = document.getElementById(_bp(tab) + 'Browser');
     if (browser.classList.contains('open')) {
@@ -66,6 +205,32 @@ function toggleBrowser(tab) {
     } else {
         const input = document.getElementById(_bp(tab) + 'Folder');
         browseTo(input.value.trim() || '~', tab);
+    }
+}
+
+async function openNativeFolderExplorer(tab) {
+    const input = document.getElementById(_bp(tab) + 'Folder');
+    const initialDir = input?.value.trim() || lastSelectedFolder || '~';
+
+    try {
+        const resp = await fetch('/api/browse/native', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initial_dir: initialDir }),
+        });
+        const data = await resp.json();
+
+        if (data.folder) {
+            if (input) {
+                input.value = data.folder;
+                _storeFolder(tab, data.folder);
+            }
+            showToast('Folder selected: ' + data.folder, 'success');
+        } else {
+            showToast(data.message || 'Native folder dialog was canceled', 'info');
+        }
+    } catch (e) {
+        showToast('Native folder open failed: ' + e.message, 'error');
     }
 }
 
@@ -87,6 +252,7 @@ async function browseTo(path, tab) {
         const prefix = _bp(tab);
         const input = document.getElementById(prefix + 'Folder');
         input.value = data.current;
+        _storeFolder(tab, data.current);
 
         const browser = document.getElementById(prefix + 'Browser');
         const fbPath = browser.querySelector('.fb-path');
@@ -123,6 +289,8 @@ async function browseTo(path, tab) {
 async function convScan() {
     const folder = document.getElementById('convFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
+    _storeFolder('converter', folder);
+    convLastFailedFiles = new Set();
 
     const includeSubfolders = document.getElementById('convSubfolders').checked;
     const filterType = document.getElementById('convFilterType').value;
@@ -202,24 +370,35 @@ function renderConvResults() {
     for (const f of files) {
         const thumbUrl = `/api/thumbnail?path=${encodeURIComponent(f.path)}`;
         const displayName = showFullPaths ? f.path : f.name;
+        const failed = convLastFailedFiles.has(f.path);
 
-        thtml += `<tr data-path="${escapeAttr(f.path)}">
+        thtml += `<tr data-path="${escapeAttr(f.path)}" class="${failed ? 'failed-file' : ''}">
             <td><img src="${thumbUrl}" class="file-thumb" onclick="openPreview('${escapeAttr(f.path)}', '${f.type}')" onerror="this.style.display='none'" /></td>
             <td>
                 <label class="checkbox-label">
                     <input type="checkbox" class="conv-check" value="${escapeAttr(f.path)}" onchange="convUpdateSelection()">
                     <span class="file-name" title="${escapeAttr(f.path)}" onclick="copyPath('${escapeAttr(f.path)}')">${escapeHtml(displayName)}</span>
                 </label>
+                ${failed ? '<span class="failed-badge">Failed</span>' : ''}
             </td>
             <td>${f.ext}</td>
             <td>${formatBytes(f.size)}</td>
             <td>
                 <select class="conv-target" style="font-size:12px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
-                    ${f.targets.map(t => `<option value="${t}">${t}</option>`).join('')}
+                    ${[...new Set([...f.targets, ...(f.type === 'video' ? ['.mp4-av1', '.mkv-av1', '.webm-av1'] : [])])]
+                        .map(t => {
+                            const isAv1 = t.endsWith('-av1');
+                            const disabled = isAv1 && !convAv1Available;
+                            const label = isAv1 && !convAv1Available
+                                ? `${t} (AV1 unavailable)`
+                                : t;
+                            return `<option value="${t}" ${disabled ? 'disabled' : ''}>${label}</option>`;
+                        }).join('')}
                 </select>
             </td>
             <td>
                 <button class="btn btn-sm btn-ghost" onclick="convConvertSingle('${escapeAttr(f.path)}', this)">Convert</button>
+                ${failed ? `<button class="btn btn-sm btn-warning" onclick="convRetrySingle('${escapeAttr(f.path)}', this)">Retry</button>` : ''}
                 <button class="btn btn-sm btn-ghost" style="color:var(--danger)" onclick="convDeleteSingle('${escapeAttr(f.path)}')">✕</button>
             </td>
         </tr>`;
@@ -227,6 +406,113 @@ function renderConvResults() {
 
     thtml += '</tbody></table>';
     table.innerHTML = thtml;
+    convUpdateBatchTargets();
+}
+
+function convSetBatchTargets(targets) {
+    const select = document.getElementById('convBatchTarget');
+    const prevValue = select.value;
+
+    const targetArray = Array.isArray(targets) ? targets.filter(Boolean) : [];
+    const uniqueTargets = [...new Set(targetArray.map(t => t.toLowerCase()))].sort();
+
+    select.innerHTML = '';
+    if (uniqueTargets.length === 0) {
+        select.disabled = true;
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No compatible target formats';
+        opt.disabled = true;
+        select.appendChild(opt);
+        return;
+    }
+
+    select.disabled = false;
+    for (const target of uniqueTargets) {
+        const option = document.createElement('option');
+        option.value = target;
+        option.textContent = target;
+        select.appendChild(option);
+    }
+
+    if (prevValue && uniqueTargets.includes(prevValue.toLowerCase())) {
+        select.value = prevValue.toLowerCase();
+    } else {
+        select.value = uniqueTargets[0];
+    }
+}
+
+function convGetBatchTargets() {
+    const selectedFilePaths = new Set(convSelectedFiles || []);
+    const modeSelect = document.getElementById('convBatchMode');
+    if (modeSelect) {
+        convBatchMode = modeSelect.value || 'union';
+        localStorage.setItem('convBatchMode', convBatchMode);
+    }
+
+    const av1CrfInput = document.getElementById('convAv1Crf');
+    if (av1CrfInput) {
+        const val = Number(av1CrfInput.value);
+        if (!Number.isNaN(val) && val >= 10 && val <= 63) {
+            convAv1Crf = val;
+            localStorage.setItem('convAv1Crf', convAv1Crf);
+            const av1CrfValue = document.getElementById('convAv1CrfValue');
+            if (av1CrfValue) {
+                av1CrfValue.textContent = String(convAv1Crf);
+            }
+        }
+    }
+
+    const modeHint = document.getElementById('convBatchModeHint');
+    if (modeHint) {
+        modeHint.textContent = convBatchMode === 'intersection'
+            ? 'Intersection = formats supported by each selected file; Union = any selected file'
+            : 'Union = formats supported by at least one selected file; Intersection = common to all';
+    }
+
+    // If no scan data yet, show global format list from converter/formats.
+    if (!convScanData || !convScanData.files || convScanData.files.length === 0) {
+        return [...new Set(convAvailableTargets)].sort();
+    }
+
+    const files = convScanData.files.filter(f => selectedFilePaths.size === 0 || selectedFilePaths.has(f.path));
+    if (files.length === 0) {
+        return [...new Set(convAvailableTargets)].sort();
+    }
+
+    const hasVideo = files.some(f => f.type === 'video');
+    const fileTargets = files.map(f => new Set((f.targets || []).map(t => t.toLowerCase())));
+
+    if (convBatchMode === 'intersection') {
+        let intersection = new Set(fileTargets[0]);
+        for (let i = 1; i < fileTargets.length; i++) {
+            intersection = new Set([...intersection].filter(t => fileTargets[i].has(t)));
+        }
+        if (hasVideo) {
+            ['.mp4-av1', '.mkv-av1', '.webm-av1'].forEach(v => intersection.add(v));
+        }
+        return [...intersection].sort();
+    }
+
+    // union
+    const union = new Set();
+    for (const targetSet of fileTargets) {
+        for (const t of targetSet) union.add(t);
+    }
+    if (hasVideo) {
+        ['.mp4-av1', '.mkv-av1', '.webm-av1'].forEach(v => union.add(v));
+    }
+    return [...union].sort();
+}
+
+function convUpdateBatchTargets() {
+    const targets = convGetBatchTargets();
+    convSetBatchTargets(targets);
+
+    const batchBtn = document.getElementById('convBatchBtn');
+    if (batchBtn) {
+        batchBtn.disabled = !targets || targets.length === 0;
+    }
 }
 
 function convSetExtFilter(ext) {
@@ -252,6 +538,8 @@ function convUpdateSelection() {
     } else {
         bar.style.display = 'none';
     }
+
+    convUpdateBatchTargets();
 }
 
 function toggleFullPaths() {
@@ -280,6 +568,7 @@ async function convConvertSingle(filePath, btnEl) {
                 files: [filePath],
                 target_ext: targetExt,
                 delete_original: deleteOrig,
+                av1_crf: convAv1Crf,
             }),
         });
         const data = await resp.json();
@@ -297,6 +586,10 @@ async function convConvertSingle(filePath, btnEl) {
 async function convConvertBatch() {
     if (convSelectedFiles.length === 0) return;
     const targetExt = document.getElementById('convBatchTarget').value;
+    if (!targetExt) {
+        showToast('No valid target format available for selected files', 'error');
+        return;
+    }
     const deleteOrig = document.getElementById('convDeleteOrig').checked;
 
     document.getElementById('convBatchBtn').disabled = true;
@@ -309,6 +602,7 @@ async function convConvertBatch() {
                 files: convSelectedFiles,
                 target_ext: targetExt,
                 delete_original: deleteOrig,
+                av1_crf: convAv1Crf,
             }),
         });
         const data = await resp.json();
@@ -361,24 +655,74 @@ async function convWaitForJob(jobId) {
             if (r.status === 'ok') {
                 const sizeInfo = r.original_size_fmt + ' → ' + r.new_size_fmt;
                 showToast(`Converted! (${sizeInfo})`, 'success');
+                convLastFailedFiles.delete(r.source);
             } else {
                 showToast('Error: ' + (r.error || 'unknown'), 'error');
+                convLastFailedFiles.add(r.source);
             }
+            renderConvResults();
             return;
         }
         await sleep(300);
     }
 }
 
+async function convRetrySingle(filePath, btnEl) {
+    const row = btnEl.closest('tr');
+    const targetSelect = row.querySelector('.conv-target');
+    const targetExt = targetSelect?.value;
+    const deleteOrig = document.getElementById('convDeleteOrig').checked;
+
+    if (!targetExt) {
+        showToast('No target selected for retry', 'error');
+        return;
+    }
+
+    btnEl.disabled = true;
+    btnEl.textContent = 'Retrying...';
+
+    try {
+        const resp = await fetch('/api/converter/convert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files: [filePath], target_ext: targetExt, delete_original: deleteOrig, av1_crf: convAv1Crf }),
+        });
+        const data = await resp.json();
+        if (data.job_id) {
+            await convWaitForJob(data.job_id);
+        }
+    } catch (e) {
+        showToast('Retry failed: ' + e.message, 'error');
+    } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Retry';
+    }
+}
+
 function convShowConversionResults(data) {
     let ok = 0, fail = 0;
+    const failedFiles = [];
+    convLastFailedFiles = new Set();
+
     for (const r of data.results) {
-        if (r.status === 'ok') ok++;
-        else fail++;
+        if (r.status === 'ok') {
+            ok++;
+        } else {
+            fail++;
+            failedFiles.push(`${r.source} (${r.error || 'unknown error'})`);
+        }
     }
-    showToast(`Done! ${ok} converted, ${fail} failed`, ok > 0 ? 'success' : 'error');
-    // Re-scan to update file list
-    convScan();
+
+        if (fail > 0) {
+        const feed = failedFiles.slice(0, 5).join(', ');
+        const rest = failedFiles.length > 5 ? `, +${failedFiles.length - 5} more` : '';
+        showToast(`Done! ${ok} converted, ${fail} failed: ${feed}${rest}`, 'error');
+    } else {
+        showToast(`Done! ${ok} converted`, 'success');
+    }
+
+    // Refresh list with failure markers
+    renderConvResults();
 }
 
 async function convDeleteSingle(filePath) {
@@ -458,6 +802,7 @@ function copyPath(path) {
 async function dupStartScan() {
     const folder = document.getElementById('dupFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
+    _storeFolder('dupfinder', folder);
 
     const scanType = document.getElementById('dupScanType').value;
     const imgThreshold = parseInt(document.getElementById('dupImgThreshold').value) / 100;
@@ -682,6 +1027,10 @@ function dupAutoSelect() {
     showToast(`Selected ${dupSelectedFiles.size} duplicate(s)`, 'success');
 }
 
+// Initialize converter formats for batch target dropdown
+convLoadFormats();
+loadFolderPreferences();
+
 function dupClearSelection() {
     dupSelectedFiles.clear();
     dupUpdateSelectionUI();
@@ -803,6 +1152,7 @@ async function dupExecuteDelete() {
 async function inspStartScan() {
     const folder = document.getElementById('inspFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
+    _storeFolder('inspector', folder);
     const mode = document.getElementById('inspMode').value;
 
     document.getElementById('inspScanBtn').disabled = true;
@@ -951,6 +1301,7 @@ async function inspStripOne(filePath) {
 async function resStartResize() {
     const folder = document.getElementById('resFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
+    _storeFolder('resizer', folder);
 
     const width = parseInt(document.getElementById('resWidth').value) || 1920;
     const height = parseInt(document.getElementById('resHeight').value) || 1080;
@@ -1059,6 +1410,7 @@ function orgModeChanged() {
 async function orgStartPlan() {
     const folder = document.getElementById('orgFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
+    _storeFolder('organizer', folder);
 
     const mode = document.getElementById('orgMode').value;
     const operation = document.getElementById('orgOperation').value;

@@ -32,8 +32,11 @@ class TestScanJob:
 
     def test_custom_thresholds(self) -> None:
         job = ScanJob(
-            id="test", folder="/tmp", scan_type="images",
-            image_threshold=0.95, video_threshold=0.80,
+            id="test",
+            folder="/tmp",
+            scan_type="images",
+            image_threshold=0.95,
+            video_threshold=0.80,
         )
         assert job.image_threshold == 0.95
         assert job.video_threshold == 0.80
@@ -212,12 +215,18 @@ class TestFormatImageGroups:
     def test_formats_group(self) -> None:
         infos = {
             "/a.jpg": ImageInfo(
-                path="/a.jpg", width=1920, height=1080,
-                format="JPEG", file_size=100000,
+                path="/a.jpg",
+                width=1920,
+                height=1080,
+                format="JPEG",
+                file_size=100000,
             ),
             "/b.jpg": ImageInfo(
-                path="/b.jpg", width=1920, height=1080,
-                format="JPEG", file_size=50000,
+                path="/b.jpg",
+                width=1920,
+                height=1080,
+                format="JPEG",
+                file_size=50000,
             ),
         }
         groups = [[("/a.jpg", 1.0), ("/b.jpg", 0.95)]]
@@ -231,8 +240,11 @@ class TestFormatImageGroups:
     def test_single_item_group_filtered(self) -> None:
         infos = {
             "/a.jpg": ImageInfo(
-                path="/a.jpg", width=100, height=100,
-                format="JPEG", file_size=1000,
+                path="/a.jpg",
+                width=100,
+                height=100,
+                format="JPEG",
+                file_size=1000,
             ),
         }
         groups = [[("/a.jpg", 1.0)]]
@@ -242,8 +254,11 @@ class TestFormatImageGroups:
     def test_missing_info_skipped(self) -> None:
         infos = {
             "/a.jpg": ImageInfo(
-                path="/a.jpg", width=100, height=100,
-                format="JPEG", file_size=1000,
+                path="/a.jpg",
+                width=100,
+                height=100,
+                format="JPEG",
+                file_size=1000,
             ),
         }
         groups = [[("/a.jpg", 1.0), ("/b.jpg", 0.95)]]
@@ -253,8 +268,11 @@ class TestFormatImageGroups:
     def test_three_items(self) -> None:
         infos = {
             f"/{n}.jpg": ImageInfo(
-                path=f"/{n}.jpg", width=100, height=100,
-                format="JPEG", file_size=i * 1000,
+                path=f"/{n}.jpg",
+                width=100,
+                height=100,
+                format="JPEG",
+                file_size=i * 1000,
             )
             for i, n in enumerate(["a", "b", "c"], 1)
         }
@@ -275,12 +293,20 @@ class TestFormatVideoGroups:
     def test_formats_group(self) -> None:
         infos = {
             "/a.mp4": VideoInfo(
-                path="/a.mp4", width=1920, height=1080,
-                duration=120.0, fps=30.0, file_size=5000000,
+                path="/a.mp4",
+                width=1920,
+                height=1080,
+                duration=120.0,
+                fps=30.0,
+                file_size=5000000,
             ),
             "/b.mp4": VideoInfo(
-                path="/b.mp4", width=1920, height=1080,
-                duration=120.0, fps=30.0, file_size=3000000,
+                path="/b.mp4",
+                width=1920,
+                height=1080,
+                duration=120.0,
+                fps=30.0,
+                file_size=3000000,
             ),
         }
         groups = [[("/a.mp4", 1.0), ("/b.mp4", 0.88)]]
@@ -294,8 +320,12 @@ class TestFormatVideoGroups:
     def test_missing_info_skipped(self) -> None:
         infos = {
             "/a.mp4": VideoInfo(
-                path="/a.mp4", width=1920, height=1080,
-                duration=60.0, fps=30.0, file_size=5000000,
+                path="/a.mp4",
+                width=1920,
+                height=1080,
+                duration=60.0,
+                fps=30.0,
+                file_size=5000000,
             ),
         }
         groups = [[("/a.mp4", 1.0), ("/b.mp4", 0.88)]]

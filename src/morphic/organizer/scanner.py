@@ -87,7 +87,9 @@ def execute_job(job_id: str) -> bool:
         return False
 
     thread = threading.Thread(
-        target=_run_execute, args=(job,), daemon=True,
+        target=_run_execute,
+        args=(job,),
+        daemon=True,
     )
     thread.start()
     return True
@@ -103,6 +105,7 @@ def _run_plan(job: ScanJob) -> None:
 
         if job.mode == "sort":
             from morphic.organizer.date_sorter import plan_sort
+
             job.plan = plan_sort(
                 job.folder,
                 template=job.template,
@@ -110,6 +113,7 @@ def _run_plan(job: ScanJob) -> None:
             )
         else:
             from morphic.organizer.renamer import plan_rename
+
             job.plan = plan_rename(
                 job.folder,
                 template=job.template,
@@ -142,13 +146,17 @@ def _run_execute(job: ScanJob) -> None:
 
         if job.mode == "sort":
             from morphic.organizer.date_sorter import execute_sort
+
             job.execution_result = execute_sort(
-                job.plan, operation=job.operation,
+                job.plan,
+                operation=job.operation,
             )
         else:
             from morphic.organizer.renamer import execute_rename
+
             job.execution_result = execute_rename(
-                job.plan, operation=job.operation,
+                job.plan,
+                operation=job.operation,
             )
 
         job.phase = "done"

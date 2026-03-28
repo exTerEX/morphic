@@ -7,7 +7,7 @@ from morphic.converter.constants import (
     _CANONICAL_VIDEO,
     _normalise,
 )
-from morphic.shared.constants import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from morphic.shared.constants import IMAGE_EXTENSIONS
 
 
 class TestNormalise:

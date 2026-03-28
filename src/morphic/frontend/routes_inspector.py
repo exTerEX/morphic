@@ -48,17 +48,19 @@ def api_scan_status(job_id: str):
         end = job.finished_at if job.finished_at else time.time()
         elapsed = end - job.started_at
 
-    return jsonify({
-        "id": job.id,
-        "status": job.status,
-        "mode": job.mode,
-        "progress": job.progress,
-        "message": job.message,
-        "error": job.error,
-        "total_files": job.total_files,
-        "processed_files": job.processed_files,
-        "elapsed_seconds": round(elapsed, 1),
-    })
+    return jsonify(
+        {
+            "id": job.id,
+            "status": job.status,
+            "mode": job.mode,
+            "progress": job.progress,
+            "message": job.message,
+            "error": job.error,
+            "total_files": job.total_files,
+            "processed_files": job.processed_files,
+            "elapsed_seconds": round(elapsed, 1),
+        }
+    )
 
 
 @bp.route("/scan/<job_id>/results")
@@ -71,11 +73,13 @@ def api_scan_results(job_id: str):
     if job.status not in ("done", "error"):
         return jsonify({"error": "Scan not finished yet"}), 409
 
-    return jsonify({
-        "mode": job.mode,
-        "results": job.results,
-        "total_files": job.total_files,
-    })
+    return jsonify(
+        {
+            "mode": job.mode,
+            "results": job.results,
+            "total_files": job.total_files,
+        }
+    )
 
 
 # ── EXIF Edit ──────────────────────────────────────────────────────────────
@@ -123,8 +127,10 @@ def api_exif_strip():
 
     results = strip_exif_batch(files)
     success_count = sum(1 for r in results.values() if r.get("success"))
-    return jsonify({
-        "results": results,
-        "total": len(files),
-        "success_count": success_count,
-    })
+    return jsonify(
+        {
+            "results": results,
+            "total": len(files),
+            "success_count": success_count,
+        }
+    )

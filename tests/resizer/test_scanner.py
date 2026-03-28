@@ -11,7 +11,9 @@ from morphic.resizer.scanner import get_job, start_job
 
 def _make_images(tmp_path, count=3):
     for i in range(count):
-        Image.new("RGB", (200, 100), "green").save(str(tmp_path / f"img{i}.png"))
+        Image.new("RGB", (200, 100), "green").save(
+            str(tmp_path / f"img{i}.png")
+        )
 
 
 class TestResizerScanner:

@@ -84,13 +84,13 @@ def resize_image(
     size = (width, height)
 
     if mode == "fit":
-        img.thumbnail(size, Image.LANCZOS)
+        img.thumbnail(size, Image.Resampling.LANCZOS)
     elif mode == "fill":
-        img = ImageOps.fit(img, size, Image.LANCZOS)
+        img = ImageOps.fit(img, size, Image.Resampling.LANCZOS)
     elif mode == "stretch":
-        img = img.resize(size, Image.LANCZOS)
+        img = img.resize(size, Image.Resampling.LANCZOS)
     elif mode == "pad":
-        img = ImageOps.pad(img, size, Image.LANCZOS, color=bg_color)
+        img = ImageOps.pad(img, size, Image.Resampling.LANCZOS, color=bg_color)
 
     # Determine output path
     src = Path(path)

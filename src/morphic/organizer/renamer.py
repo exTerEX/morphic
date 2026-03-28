@@ -111,17 +111,19 @@ def plan_rename(
         dest = os.path.join(dest_base, new_name)
 
         conflict = dest in seen_destinations or (
-            os.path.exists(dest) and os.path.abspath(dest)
-            != os.path.abspath(path)
+            os.path.exists(dest)
+            and os.path.abspath(dest) != os.path.abspath(path)
         )
         seen_destinations.add(dest)
 
-        plan.append({
-            "source": path,
-            "new_name": new_name,
-            "destination": dest,
-            "conflict": conflict,
-        })
+        plan.append(
+            {
+                "source": path,
+                "new_name": new_name,
+                "destination": dest,
+                "conflict": conflict,
+            }
+        )
 
     return plan
 
@@ -158,12 +160,14 @@ def execute_rename(
 
         if entry.get("conflict"):
             skipped += 1
-            results.append({
-                "source": src,
-                "destination": dest,
-                "status": "skipped",
-                "reason": "name conflict",
-            })
+            results.append(
+                {
+                    "source": src,
+                    "destination": dest,
+                    "status": "skipped",
+                    "reason": "name conflict",
+                }
+            )
             continue
 
         try:
@@ -173,19 +177,23 @@ def execute_rename(
             else:
                 shutil.copy2(src, dest)
             completed += 1
-            results.append({
-                "source": src,
-                "destination": dest,
-                "status": "ok",
-            })
+            results.append(
+                {
+                    "source": src,
+                    "destination": dest,
+                    "status": "ok",
+                }
+            )
         except Exception as e:
             errors += 1
-            results.append({
-                "source": src,
-                "destination": dest,
-                "status": "error",
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "source": src,
+                    "destination": dest,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
 
     return {
         "completed": completed,

@@ -22,9 +22,15 @@ from morphic.dupfinder.images import (
 class TestImageInfoToDict:
     def test_to_dict_keys(self) -> None:
         info = ImageInfo(
-            path="/img.jpg", width=100, height=200,
-            file_size=999, format="JPEG", mode="RGB",
-            phash="abc", ahash="def", dhash="ghi",
+            path="/img.jpg",
+            width=100,
+            height=200,
+            file_size=999,
+            format="JPEG",
+            mode="RGB",
+            phash="abc",
+            ahash="def",
+            dhash="ghi",
         )
         d = info.to_dict()
         assert d["path"] == "/img.jpg"
@@ -54,8 +60,12 @@ class TestImageInfoToDict:
 
     def test_custom_values(self) -> None:
         info = ImageInfo(
-            path="/a.jpg", width=1920, height=1080,
-            format="JPEG", file_size=5000, phash="abc123",
+            path="/a.jpg",
+            width=1920,
+            height=1080,
+            format="JPEG",
+            file_size=5000,
+            phash="abc123",
         )
         assert info.width == 1920
         assert info.format == "JPEG"
@@ -205,7 +215,9 @@ class TestImageDuplicateFinder:
         Image.new("RGB", (50, 50), "red").save(str(img_path))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, hash_type="phash",
+            use_gpu=False,
+            hash_size=8,
+            hash_type="phash",
         )
         info = finder.hasher.compute_hashes(str(img_path))
         similarity = finder.compute_similarity(info, info)
@@ -216,7 +228,9 @@ class TestImageDuplicateFinder:
         Image.new("RGB", (50, 50), "red").save(str(img_path))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, hash_type="ahash",
+            use_gpu=False,
+            hash_size=8,
+            hash_type="ahash",
         )
         info = finder.hasher.compute_hashes(str(img_path))
         similarity = finder.compute_similarity(info, info)
@@ -227,7 +241,9 @@ class TestImageDuplicateFinder:
         Image.new("RGB", (50, 50), "red").save(str(img_path))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, hash_type="dhash",
+            use_gpu=False,
+            hash_size=8,
+            hash_type="dhash",
         )
         info = finder.hasher.compute_hashes(str(img_path))
         similarity = finder.compute_similarity(info, info)
@@ -238,7 +254,9 @@ class TestImageDuplicateFinder:
         Image.new("RGB", (50, 50), "red").save(str(img_path))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, hash_type="whash",
+            use_gpu=False,
+            hash_size=8,
+            hash_type="whash",
         )
         info = finder.hasher.compute_hashes(str(img_path))
         similarity = finder.compute_similarity(info, info)
@@ -249,7 +267,9 @@ class TestImageDuplicateFinder:
             Image.new("RGB", (50, 50), "red").save(str(tmp_path / name))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.9,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.9,
         )
         files = [str(tmp_path / n) for n in ["a.jpg", "b.jpg", "c.jpg"]]
         finder.process_images(files)
@@ -261,7 +281,9 @@ class TestImageDuplicateFinder:
             Image.new("RGB", (50, 50), "red").save(str(tmp_path / name))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.9,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.9,
         )
         files = [str(tmp_path / n) for n in ["a.jpg", "b.jpg"]]
         finder.process_images(files)
@@ -288,7 +310,9 @@ class TestImageDuplicateFinder:
         Image.fromarray(arr).save(str(img2_path))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.8,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.8,
         )
         files = [str(img1_path), str(img2_path)]
         finder.process_images(files)
@@ -302,7 +326,9 @@ class TestImageDuplicateFinder:
             Image.new("RGB", (50, 50), "red").save(str(tmp_path / name))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.9,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.9,
         )
         files = [str(tmp_path / n) for n in ["a.jpg", "b.jpg", "c.jpg"]]
         finder.process_images(files)
@@ -318,12 +344,16 @@ class TestImageDuplicateFinder:
 
     @patch("morphic.dupfinder.images._compute_similarity_matrix_gpu")
     @patch("morphic.dupfinder.images._gpu_available", True)
-    def test_find_near_duplicates_gpu_fallback(self, mock_sim, tmp_path) -> None:
+    def test_find_near_duplicates_gpu_fallback(
+        self, mock_sim, tmp_path
+    ) -> None:
         for name in ["a.jpg", "b.jpg"]:
             Image.new("RGB", (50, 50), "red").save(str(tmp_path / name))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.9,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.9,
         )
         files = [str(tmp_path / n) for n in ["a.jpg", "b.jpg"]]
         finder.process_images(files)
@@ -344,11 +374,15 @@ class TestImageDuplicateFinder:
         for i in range(105):
             path = f"/fake/img_{i}.jpg"
             finder.image_infos[path] = ImageInfo(
-                path=path, phash=f"hash{i:04d}",
-                ahash=f"ahash{i:04d}", dhash=f"dhash{i:04d}",
+                path=path,
+                phash=f"hash{i:04d}",
+                ahash=f"ahash{i:04d}",
+                dhash=f"dhash{i:04d}",
             )
 
-        with patch.object(finder, "find_duplicates_fast", return_value=[]) as mock:
+        with patch.object(
+            finder, "find_duplicates_fast", return_value=[]
+        ) as mock:
             finder.find_duplicates()
             mock.assert_called_once()
 
@@ -357,7 +391,9 @@ class TestImageDuplicateFinder:
             Image.new("RGB", (50, 50), "red").save(str(tmp_path / name))
 
         finder = ImageDuplicateFinder(
-            use_gpu=False, hash_size=8, similarity_threshold=0.9,
+            use_gpu=False,
+            hash_size=8,
+            similarity_threshold=0.9,
         )
         files = [str(tmp_path / n) for n in ["a.jpg", "b.jpg"]]
         finder.process_images(files)

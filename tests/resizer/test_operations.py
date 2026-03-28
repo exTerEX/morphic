@@ -7,7 +7,7 @@ import os
 import pytest
 from PIL import Image
 
-from morphic.resizer.operations import RESIZE_MODES, resize_image
+from morphic.resizer.operations import resize_image
 
 
 def _make_image(path: str, size: tuple[int, int] = (200, 100)) -> str:
@@ -18,7 +18,9 @@ def _make_image(path: str, size: tuple[int, int] = (200, 100)) -> str:
 class TestResizeModes:
     def test_fit(self, tmp_path) -> None:
         src = _make_image(str(tmp_path / "src.png"), (400, 200))
-        dest = resize_image(src, 100, 100, mode="fit", output_folder=str(tmp_path / "out"))
+        dest = resize_image(
+            src, 100, 100, mode="fit", output_folder=str(tmp_path / "out")
+        )
         img = Image.open(dest)
         # fit keeps aspect ratio, so 100x50
         assert img.width <= 100
@@ -26,19 +28,25 @@ class TestResizeModes:
 
     def test_fill(self, tmp_path) -> None:
         src = _make_image(str(tmp_path / "src.png"), (400, 200))
-        dest = resize_image(src, 100, 100, mode="fill", output_folder=str(tmp_path / "out"))
+        dest = resize_image(
+            src, 100, 100, mode="fill", output_folder=str(tmp_path / "out")
+        )
         img = Image.open(dest)
         assert img.size == (100, 100)
 
     def test_stretch(self, tmp_path) -> None:
         src = _make_image(str(tmp_path / "src.png"), (400, 200))
-        dest = resize_image(src, 100, 50, mode="stretch", output_folder=str(tmp_path / "out"))
+        dest = resize_image(
+            src, 100, 50, mode="stretch", output_folder=str(tmp_path / "out")
+        )
         img = Image.open(dest)
         assert img.size == (100, 50)
 
     def test_pad(self, tmp_path) -> None:
         src = _make_image(str(tmp_path / "src.png"), (400, 200))
-        dest = resize_image(src, 100, 100, mode="pad", output_folder=str(tmp_path / "out"))
+        dest = resize_image(
+            src, 100, 100, mode="pad", output_folder=str(tmp_path / "out")
+        )
         img = Image.open(dest)
         assert img.size == (100, 100)
 
@@ -69,22 +77,38 @@ class TestResizeOutput:
 
     def test_format_override(self, tmp_path) -> None:
         src = _make_image(str(tmp_path / "src.png"))
-        dest = resize_image(src, 50, 50, output_format=".jpg", output_folder=str(tmp_path / "out"))
+        dest = resize_image(
+            src,
+            50,
+            50,
+            output_format=".jpg",
+            output_folder=str(tmp_path / "out"),
+        )
         assert dest.endswith(".jpg")
         img = Image.open(dest)
         assert img.mode == "RGB"
 
     def test_quality_param(self, tmp_path) -> None:
         src = _make_image(str(tmp_path / "src.jpg"))
-        dest_high = resize_image(src, 50, 50, quality=95, output_folder=str(tmp_path / "hi"))
-        dest_low = resize_image(src, 50, 50, quality=10, output_folder=str(tmp_path / "lo"))
+        dest_high = resize_image(
+            src, 50, 50, quality=95, output_folder=str(tmp_path / "hi")
+        )
+        dest_low = resize_image(
+            src, 50, 50, quality=10, output_folder=str(tmp_path / "lo")
+        )
         # Lower quality should be smaller file
         assert os.path.getsize(dest_low) <= os.path.getsize(dest_high)
 
     def test_rgba_to_jpg(self, tmp_path) -> None:
         src = str(tmp_path / "rgba.png")
         Image.new("RGBA", (50, 50), (255, 0, 0, 128)).save(src)
-        dest = resize_image(src, 30, 30, output_format=".jpg", output_folder=str(tmp_path / "out"))
+        dest = resize_image(
+            src,
+            30,
+            30,
+            output_format=".jpg",
+            output_folder=str(tmp_path / "out"),
+        )
         img = Image.open(dest)
         assert img.mode == "RGB"
 

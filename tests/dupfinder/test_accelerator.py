@@ -31,8 +31,10 @@ class TestGPUAcceleratorProperties:
         assert isinstance(name, str)
         assert len(name) > 0
         expected = {
-            "CUDA (NVIDIA GPU)", "ROCm (AMD GPU)",
-            "OpenCL (GPU)", "CPU Multiprocessing",
+            "CUDA (NVIDIA GPU)",
+            "ROCm (AMD GPU)",
+            "OpenCL (GPU)",
+            "CPU Multiprocessing",
         }
         assert name in expected
 
@@ -164,7 +166,9 @@ class TestComputeSimilarityMatrixGpu:
 
     def test_hex_strings(self) -> None:
         hashes = ["abcdef0123456789", "abcdef0123456789"]
-        result = compute_similarity_matrix_gpu(cast(list[str | np.ndarray], hashes), hash_size=4)
+        result = compute_similarity_matrix_gpu(
+            cast(list[str | np.ndarray], hashes), hash_size=4
+        )
         assert result.shape == (2, 2)
         assert result[0, 1] == pytest.approx(1.0)
 

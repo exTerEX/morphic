@@ -101,6 +101,12 @@ class TestBrowseRoute:
         data = resp.get_json()
         assert "folder" in data
 
+    def test_system_info(self, client) -> None:
+        resp = client.get("/api/system_info")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "ffmpeg" in data
+
     def test_browse_hidden_dirs_excluded(self, client, tmp_path) -> None:
         hidden = tmp_path / ".hidden"
         hidden.mkdir()
@@ -204,6 +210,71 @@ class TestMediaRoute:
         assert resp.status_code == 200
 
 
+class TestInspectorRoute:
+    def test_inspector_scan(self, client, tmp_path) -> None:
+        resp = client.post("/api/inspector/scan", json={})
+        assert resp.status_code == 400
+
+        resp = client.post(
+            "/api/inspector/scan",
+            json={"folder": str(tmp_path), "mode": "exif"},
+        )
+        assert resp.status_code == 202
+        job_id = resp.get_json()["job_id"]
+
+        status = client.get(f"/api/inspector/scan/{job_id}/status")
+        assert status.status_code == 200
+
+        results = client.get(f"/api/inspector/scan/{job_id}/results")
+        assert results.status_code in (200, 409)
+
+    def test_exif_edit_strip(self, client, tmp_path) -> None:
+        resp = client.post("/api/inspector/exif/edit", json={})
+        assert resp.status_code == 400
+
+        resp = client.post("/api/inspector/exif/strip", json={})
+        assert resp.status_code == 400
+
+
+class TestOrganizerRoute:
+    def test_organizer_plan_invalid(self, client, tmp_path) -> None:
+        resp = client.post("/api/organizer/plan", json={})
+        assert resp.status_code == 400
+
+        resp = client.post(
+            "/api/organizer/plan",
+            json={
+                "folder": str(tmp_path),
+                "mode": "sort",
+                "operation": "copy",
+            },
+        )
+        assert resp.status_code == 202
+
+    def test_organizer_status_not_found(self, client) -> None:
+        resp = client.get("/api/organizer/status/notfound")
+        assert resp.status_code == 404
+
+
+class TestResizerRoute:
+    def test_resizer_scan_invalid(self, client, tmp_path) -> None:
+        resp = client.post("/api/resizer/scan", json={})
+        assert resp.status_code == 400
+
+        resp = client.post(
+            "/api/resizer/scan",
+            json={"folder": str(tmp_path), "width": 100, "height": 100},
+        )
+        assert resp.status_code == 202
+
+    def test_resizer_status_results(self, client) -> None:
+        resp = client.get("/api/resizer/scan/notfound/status")
+        assert resp.status_code == 404
+
+        resp = client.get("/api/resizer/scan/notfound/results")
+        assert resp.status_code == 404
+
+
 # ── Converter — scan ───────────────────────────────────────────────────────
 
 
@@ -241,10 +312,12 @@ class TestConverterScanRoute:
     def test_scan_images_only(self, client, tmp_media) -> None:
         resp = client.post(
             "/api/converter/scan",
-            data=json.dumps({
-                "folder": str(tmp_media),
-                "filter_type": "images",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_media),
+                    "filter_type": "images",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -256,10 +329,12 @@ class TestConverterScanRoute:
     def test_scan_videos_only(self, client, tmp_media) -> None:
         resp = client.post(
             "/api/converter/scan",
-            data=json.dumps({
-                "folder": str(tmp_media),
-                "filter_type": "videos",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_media),
+                    "filter_type": "videos",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -267,10 +342,12 @@ class TestConverterScanRoute:
     def test_scan_no_subfolders(self, client, tmp_media) -> None:
         resp = client.post(
             "/api/converter/scan",
-            data=json.dumps({
-                "folder": str(tmp_media),
-                "include_subfolders": False,
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_media),
+                    "include_subfolders": False,
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -281,10 +358,12 @@ class TestConverterScanRoute:
     def test_scan_invalid_filter_type(self, client, tmp_media) -> None:
         resp = client.post(
             "/api/converter/scan",
-            data=json.dumps({
-                "folder": str(tmp_media),
-                "filter_type": "invalid",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_media),
+                    "filter_type": "invalid",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -329,10 +408,12 @@ class TestConverterConvertRoute:
     def test_convert_single_file(self, client, test_image) -> None:
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": [test_image],
-                "target_ext": ".png",
-            }),
+            data=json.dumps(
+                {
+                    "files": [test_image],
+                    "target_ext": ".png",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -342,10 +423,12 @@ class TestConverterConvertRoute:
     def test_convert_progress(self, client, test_image) -> None:
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": [test_image],
-                "target_ext": ".png",
-            }),
+            data=json.dumps(
+                {
+                    "files": [test_image],
+                    "target_ext": ".png",
+                }
+            ),
             content_type="application/json",
         )
         job_id = resp.get_json()["job_id"]
@@ -360,10 +443,12 @@ class TestConverterConvertRoute:
     def test_missing_target_ext(self, client, test_image) -> None:
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": [test_image],
-                "target_ext": "",
-            }),
+            data=json.dumps(
+                {
+                    "files": [test_image],
+                    "target_ext": "",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 400
@@ -374,11 +459,13 @@ class TestConverterConvertRoute:
 
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": [str(src)],
-                "target_ext": ".png",
-                "delete_original": True,
-            }),
+            data=json.dumps(
+                {
+                    "files": [str(src)],
+                    "target_ext": ".png",
+                    "delete_original": True,
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -393,10 +480,12 @@ class TestConverterConvertRoute:
     def test_progress_poll(self, client, test_image) -> None:
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": [test_image],
-                "target_ext": ".png",
-            }),
+            data=json.dumps(
+                {
+                    "files": [test_image],
+                    "target_ext": ".png",
+                }
+            ),
             content_type="application/json",
         )
         job_id = resp.get_json()["job_id"]
@@ -414,10 +503,12 @@ class TestConverterConvertRoute:
     def test_convert_nonexistent_source(self, client) -> None:
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": ["/nonexistent/file.jpg"],
-                "target_ext": ".png",
-            }),
+            data=json.dumps(
+                {
+                    "files": ["/nonexistent/file.jpg"],
+                    "target_ext": ".png",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -438,10 +529,12 @@ class TestConverterConvertRoute:
 
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": files,
-                "target_ext": ".png",
-            }),
+            data=json.dumps(
+                {
+                    "files": files,
+                    "target_ext": ".png",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -463,10 +556,12 @@ class TestConverterConvertRoute:
 
         resp = client.post(
             "/api/converter/convert",
-            data=json.dumps({
-                "files": [str(src)],
-                "target_ext": ".png",
-            }),
+            data=json.dumps(
+                {
+                    "files": [str(src)],
+                    "target_ext": ".png",
+                }
+            ),
             content_type="application/json",
         )
         job_id = resp.get_json()["job_id"]
@@ -536,9 +631,11 @@ class TestConverterDeleteRoute:
 
         resp = client.post(
             "/api/converter/delete",
-            data=json.dumps({
-                "files": [str(real), "/nonexistent/file.jpg"],
-            }),
+            data=json.dumps(
+                {
+                    "files": [str(real), "/nonexistent/file.jpg"],
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -572,10 +669,12 @@ class TestDupfinderScanRoute:
     def test_invalid_scan_type(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "invalid",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "invalid",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 400
@@ -587,10 +686,12 @@ class TestDupfinderScanRoute:
     def test_valid_scan_start(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "images",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "images",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -600,12 +701,14 @@ class TestDupfinderScanRoute:
     def test_scan_with_thresholds(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "both",
-                "image_threshold": 0.95,
-                "video_threshold": 0.80,
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "both",
+                    "image_threshold": 0.95,
+                    "video_threshold": 0.80,
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -613,10 +716,12 @@ class TestDupfinderScanRoute:
     def test_scan_status_after_start(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "images",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "images",
+                }
+            ),
             content_type="application/json",
         )
         job_id = resp.get_json()["job_id"]
@@ -630,10 +735,12 @@ class TestDupfinderScanRoute:
     def test_scan_results_not_done(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "images",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "images",
+                }
+            ),
             content_type="application/json",
         )
         job_id = resp.get_json()["job_id"]
@@ -644,10 +751,12 @@ class TestDupfinderScanRoute:
     def test_scan_results_after_completion(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "images",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "images",
+                }
+            ),
             content_type="application/json",
         )
         job_id = resp.get_json()["job_id"]
@@ -668,10 +777,12 @@ class TestDupfinderScanRoute:
     def test_scan_videos_only(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "videos",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "videos",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -679,10 +790,12 @@ class TestDupfinderScanRoute:
     def test_scan_both_types(self, client, tmp_path) -> None:
         resp = client.post(
             "/api/dupfinder/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "type": "both",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "type": "both",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -757,9 +870,11 @@ class TestDupfinderDeleteRoute:
 
         resp = client.post(
             "/api/dupfinder/delete",
-            data=json.dumps({
-                "files": [str(f), "/nonexistent.jpg"],
-            }),
+            data=json.dumps(
+                {
+                    "files": [str(f), "/nonexistent.jpg"],
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -838,10 +953,14 @@ class TestResizerRoutes:
         Image.new("RGB", (100, 100)).save(str(tmp_path / "img.png"))
         resp = client.post(
             "/api/resizer/scan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "width": 50, "height": 50, "mode": "fit",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "width": 50,
+                    "height": 50,
+                    "mode": "fit",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202
@@ -873,12 +992,14 @@ class TestOrganizerRoutes:
         Image.new("RGB", (10, 10)).save(str(tmp_path / "photo.jpg"), "JPEG")
         resp = client.post(
             "/api/organizer/plan",
-            data=json.dumps({
-                "folder": str(tmp_path),
-                "mode": "sort",
-                "operation": "copy",
-                "template": "{year}/{month}",
-            }),
+            data=json.dumps(
+                {
+                    "folder": str(tmp_path),
+                    "mode": "sort",
+                    "operation": "copy",
+                    "template": "{year}/{month}",
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 202

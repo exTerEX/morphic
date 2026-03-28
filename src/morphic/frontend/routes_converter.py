@@ -57,10 +57,12 @@ def api_scan():
 @bp.route("/formats")
 def api_formats():
     """Return all conversion mappings (source -> targets)."""
-    return jsonify({
-        "image": IMAGE_CONVERSIONS,
-        "video": VIDEO_CONVERSIONS,
-    })
+    return jsonify(
+        {
+            "image": IMAGE_CONVERSIONS,
+            "video": VIDEO_CONVERSIONS,
+        }
+    )
 
 
 # ── Convert ────────────────────────────────────────────────────────────────
@@ -75,7 +77,24 @@ def api_convert():
 
     files = data.get("files", [])
     target_ext = data.get("target_ext", "").strip()
-    delete_original = data.get("delete_original", False)
+    delete_original = bool(data.get("delete_original", False))
+    av1_crf = data.get("av1_crf")
+
+    # Safety check: only allow source deletion if explicitly set true (boolean-like via strict cast).
+    if "delete_original" in data and data.get("delete_original") not in (
+        True,
+        "true",
+        "True",
+        1,
+        "1",
+    ):
+        delete_original = False
+
+    if av1_crf is not None:
+        try:
+            av1_crf = int(av1_crf)
+        except (TypeError, ValueError):
+            return jsonify({"error": "av1_crf must be an integer"}), 400
 
     if not files or not target_ext:
         return jsonify({"error": "files and target_ext required"}), 400
@@ -95,7 +114,7 @@ def api_convert():
 
     thread = threading.Thread(
         target=_run_conversion,
-        args=(job, files, target_ext, delete_original),
+        args=(job, files, target_ext, delete_original, av1_crf),
         daemon=True,
     )
     thread.start()
@@ -107,14 +126,23 @@ def _run_conversion(
     files: list[str],
     target_ext: str,
     delete_original: bool,
+    av1_crf: int | None = None,
 ) -> None:
     """Background worker for batch conversion."""
     for i, source in enumerate(files):
         job["current_file"] = os.path.basename(source)
         try:
-            original_size = os.path.getsize(source) if os.path.isfile(source) else 0
-            dest = convert_file(source, target_ext)
-            new_size = os.path.getsize(dest) if os.path.isfile(dest) else 0
+            original_size = (
+                os.path.getsize(source) if os.path.isfile(source) else 0
+            )
+            dest = convert_file(source, target_ext, av1_crf=av1_crf)
+
+            if not dest or not os.path.isfile(dest):
+                raise RuntimeError(
+                    "Conversion completed but output file is missing"
+                )
+
+            new_size = os.path.getsize(dest)
 
             result = {
                 "source": source,
@@ -124,9 +152,18 @@ def _run_conversion(
                 "new_size": new_size,
                 "original_size_fmt": format_file_size(original_size),
                 "new_size_fmt": format_file_size(new_size),
+                "source_deleted": False,
             }
 
-            if delete_original and os.path.isfile(source):
+            # Delete original only if explicitly requested and conversion definitely succeeded.
+            # Avoid deleting source if destination is missing, same as source, or if input was not a real file.
+            if (
+                delete_original
+                and os.path.isfile(source)
+                and os.path.isfile(dest)
+                and os.path.abspath(source) != os.path.abspath(dest)
+                and new_size > 0
+            ):
                 try:
                     os.remove(source)
                     result["source_deleted"] = True
@@ -138,6 +175,7 @@ def _run_conversion(
                 "destination": None,
                 "status": "error",
                 "error": str(e),
+                "source_deleted": False,
             }
         job["results"].append(result)
         job["completed"] = i + 1
@@ -202,18 +240,22 @@ def api_delete():
             size = os.path.getsize(fp)
             os.remove(fp)
             total_freed += size
-            results.append({
-                "path": fp,
-                "status": "deleted",
-                "size_freed": size,
-            })
+            results.append(
+                {
+                    "path": fp,
+                    "status": "deleted",
+                    "size_freed": size,
+                }
+            )
         except PermissionError:
             results.append({"path": fp, "status": "permission_denied"})
         except Exception as e:
             results.append({"path": fp, "status": "error", "error": str(e)})
 
-    return jsonify({
-        "results": results,
-        "total_freed": total_freed,
-        "total_freed_formatted": format_file_size(total_freed),
-    })
+    return jsonify(
+        {
+            "results": results,
+            "total_freed": total_freed,
+            "total_freed_formatted": format_file_size(total_freed),
+        }
+    )

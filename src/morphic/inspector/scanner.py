@@ -73,9 +73,7 @@ def _run_scan(job: ScanJob) -> None:
         job.started_at = time.time()
 
         # Determine extensions to look for
-        extensions = (
-            IMAGE_EXTENSIONS if job.mode == "exif" else ALL_EXTENSIONS
-        )
+        extensions = IMAGE_EXTENSIONS if job.mode == "exif" else ALL_EXTENSIONS
         job.message = f"Scanning folder: {job.folder}"
         paths = find_files_by_extension(job.folder, extensions)
         job.total_files = len(paths)
@@ -120,24 +118,28 @@ def _scan_exif(job: ScanJob, paths: list[str]) -> None:
             continue
         try:
             exif = read_exif(path)
-            job.results.append({
-                "path": path,
-                "filename": os.path.basename(path),
-                "directory": os.path.dirname(path),
-                "exif": exif,
-                "has_exif": bool(exif),
-                "has_gps": "_gps_lat" in exif,
-            })
+            job.results.append(
+                {
+                    "path": path,
+                    "filename": os.path.basename(path),
+                    "directory": os.path.dirname(path),
+                    "exif": exif,
+                    "has_exif": bool(exif),
+                    "has_gps": "_gps_lat" in exif,
+                }
+            )
         except Exception as e:
-            job.results.append({
-                "path": path,
-                "filename": os.path.basename(path),
-                "directory": os.path.dirname(path),
-                "exif": {},
-                "has_exif": False,
-                "has_gps": False,
-                "error": str(e),
-            })
+            job.results.append(
+                {
+                    "path": path,
+                    "filename": os.path.basename(path),
+                    "directory": os.path.dirname(path),
+                    "exif": {},
+                    "has_exif": False,
+                    "has_gps": False,
+                    "error": str(e),
+                }
+            )
         job.processed_files = i + 1
         job.progress = (i + 1) / job.total_files
         job.message = f"Reading EXIF: {i + 1}/{job.total_files}"

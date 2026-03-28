@@ -98,7 +98,8 @@ class VideoHasher:
         self.hash_size = hash_size
 
     def extract_frames(
-        self, video_path: str,
+        self,
+        video_path: str,
     ) -> tuple[list[np.ndarray], VideoInfo]:
         """Extract frames from a video at regular intervals."""
         video_info = VideoInfo(path=video_path)
@@ -122,13 +123,12 @@ class VideoHasher:
             video_info.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
             if video_info.frame_count > 0 and video_info.fps > 0:
-                video_info.duration = (
-                    video_info.frame_count / video_info.fps
-                )
+                video_info.duration = video_info.frame_count / video_info.fps
 
             if video_info.frame_count <= 0:
                 logger.warning(
-                    "Could not determine frame count: %s", video_path,
+                    "Could not determine frame count: %s",
+                    video_path,
                 )
                 cap.release()
                 return frames, video_info
@@ -214,7 +214,8 @@ class VideoDuplicateFinder:
         self.num_workers = num_workers
         self.hash_size = hash_size
         self.hasher = VideoHasher(
-            num_frames=num_frames, hash_size=hash_size,
+            num_frames=num_frames,
+            hash_size=hash_size,
         )
         self.video_infos: dict[str, VideoInfo] = {}
 
@@ -234,11 +235,14 @@ class VideoDuplicateFinder:
     def find_videos(self, folder: str) -> list[str]:
         """Find all video files in a folder recursively."""
         return find_files_by_extension(
-            folder, VIDEO_EXTENSIONS, EXCLUDED_FOLDERS,
+            folder,
+            VIDEO_EXTENSIONS,
+            EXCLUDED_FOLDERS,
         )
 
     def process_videos(
-        self, video_files: list[str],
+        self,
+        video_files: list[str],
     ) -> dict[str, VideoInfo]:
         """Process all videos and compute their hashes."""
         logger.info("Processing videos and computing hashes...")
@@ -261,16 +265,21 @@ class VideoDuplicateFinder:
                         self.video_infos[video_path] = video_info
                 except Exception as e:
                     logger.error(
-                        "Error processing %s: %s", video_path, e,
+                        "Error processing %s: %s",
+                        video_path,
+                        e,
                     )
 
         logger.info(
-            "Successfully processed %d videos", len(self.video_infos),
+            "Successfully processed %d videos",
+            len(self.video_infos),
         )
         return self.video_infos
 
     def compute_similarity(
-        self, info1: VideoInfo, info2: VideoInfo,
+        self,
+        info1: VideoInfo,
+        info2: VideoInfo,
     ) -> float:
         """Compute similarity between two videos."""
         if not info1.frame_hashes or not info2.frame_hashes:
@@ -293,11 +302,7 @@ class VideoDuplicateFinder:
 
             similarities.append(best_sim)
 
-        return (
-            sum(similarities) / len(similarities)
-            if similarities
-            else 0.0
-        )
+        return sum(similarities) / len(similarities) if similarities else 0.0
 
     def find_duplicates(
         self,
@@ -308,17 +313,19 @@ class VideoDuplicateFinder:
         video_paths = list(self.video_infos.keys())
         n = len(video_paths)
 
-        if self.use_gpu and n > 20:
+        if self.use_gpu and n > 1:
             return self._find_duplicates_gpu(video_paths)
         return self._find_duplicates_cpu(video_paths)
 
     def _find_duplicates_gpu(
-        self, video_paths: list[str],
+        self,
+        video_paths: list[str],
     ) -> list[list[tuple[str, float]]]:
         """Find duplicates using GPU-accelerated frame hash comparison."""
         n = len(video_paths)
         logger.info(
-            "Computing video similarities using GPU for %d videos...", n,
+            "Computing video similarities using GPU for %d videos...",
+            n,
         )
 
         combined_hashes: list[str] = []
@@ -337,11 +344,13 @@ class VideoDuplicateFinder:
             if _compute_similarity_matrix_gpu is None:
                 raise RuntimeError("GPU not initialized")
             sim_matrix = _compute_similarity_matrix_gpu(
-                combined_hashes, self.hash_size,
+                combined_hashes,
+                self.hash_size,
             )
         except Exception as e:
             logger.warning(
-                "GPU computation failed, falling back to CPU: %s", e,
+                "GPU computation failed, falling back to CPU: %s",
+                e,
             )
             return self._find_duplicates_cpu(video_paths)
 
@@ -353,7 +362,8 @@ class VideoDuplicateFinder:
                 continue
 
             pre_threshold = max(
-                0.5, self.similarity_threshold - 0.2,
+                0.5,
+                self.similarity_threshold - 0.2,
             )
             candidate_indices = np.where(
                 sim_matrix[i] >= pre_threshold,
@@ -383,12 +393,14 @@ class VideoDuplicateFinder:
                 duplicate_groups.append(current_group)
 
         logger.info(
-            "Found %d groups of duplicates", len(duplicate_groups),
+            "Found %d groups of duplicates",
+            len(duplicate_groups),
         )
         return duplicate_groups
 
     def _find_duplicates_cpu(
-        self, video_paths: list[str],
+        self,
+        video_paths: list[str],
     ) -> list[list[tuple[str, float]]]:
         """Find duplicates using CPU-based comparison."""
         n = len(video_paths)
@@ -427,6 +439,7 @@ class VideoDuplicateFinder:
                     duplicate_groups.append(current_group)
 
         logger.info(
-            "Found %d groups of duplicates", len(duplicate_groups),
+            "Found %d groups of duplicates",
+            len(duplicate_groups),
         )
         return duplicate_groups

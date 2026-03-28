@@ -12,10 +12,12 @@ Accelerates:
 
 from __future__ import annotations
 
+import importlib
 import logging
 import multiprocessing as mp
 import warnings
 from enum import Enum, auto
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -59,11 +61,11 @@ class GPUAccelerator:
         self.backend: AcceleratorType = AcceleratorType.CPU
         self.device = None
         self.torch_device = None
-        self._torch = None
-        self._cp = None
-        self._cl = None
-        self._cl_ctx = None
-        self._cl_queue = None
+        self._torch: Any = None
+        self._cp: Any = None
+        self._cl: Any = None
+        self._cl_ctx: Any = None
+        self._cl_queue: Any = None
         self.num_cpus = mp.cpu_count()
 
         self._detect_backend()
@@ -82,9 +84,11 @@ class GPUAccelerator:
     def _try_cuda(self) -> bool:  # pragma: no cover
         """Try to initialize CUDA backend."""
         try:
-            import torch
-
-            if torch.cuda.is_available():
+            torch = importlib.import_module("torch")
+            if (
+                getattr(torch, "cuda", None) is not None
+                and torch.cuda.is_available()
+            ):
                 try:
                     test_device = torch.device("cuda")
                     test_tensor = torch.zeros(1, device=test_device)
@@ -103,33 +107,35 @@ class GPUAccelerator:
                     return True
                 except RuntimeError as e:
                     logger.warning(
-                        "PyTorch CUDA available but not functional: %s", e,
+                        "PyTorch CUDA available but not functional: %s",
+                        e,
                     )
-        except ImportError:
+        except (ImportError, Exception):
             pass
 
         try:
-            import cupy as cp
+            cp = importlib.import_module("cupy")
+            if getattr(cp, "cuda", None) is not None:
+                device_count = cp.cuda.runtime.getDeviceCount()
+                if device_count > 0:
+                    test_arr = cp.zeros(1)
+                    _ = test_arr + 1
+                    del test_arr
+                    cp.get_default_memory_pool().free_all_blocks()
 
-            device_count = cp.cuda.runtime.getDeviceCount()
-            if device_count > 0:
-                test_arr = cp.zeros(1)
-                _ = test_arr + 1
-                del test_arr
-                cp.get_default_memory_pool().free_all_blocks()
-
-                self._cp = cp
-                self.backend = AcceleratorType.CUDA
-                device_props = cp.cuda.runtime.getDeviceProperties(0)
-                gpu_name = (
-                    device_props["name"].decode()
-                    if isinstance(device_props["name"], bytes)
-                    else device_props["name"]
-                )
-                logger.info(
-                    "Using CUDA acceleration via CuPy: %s", gpu_name,
-                )
-                return True
+                    self._cp = cp
+                    self.backend = AcceleratorType.CUDA
+                    device_props = cp.cuda.runtime.getDeviceProperties(0)
+                    gpu_name = (
+                        device_props["name"].decode()
+                        if isinstance(device_props["name"], bytes)
+                        else device_props["name"]
+                    )
+                    logger.info(
+                        "Using CUDA acceleration via CuPy: %s",
+                        gpu_name,
+                    )
+                    return True
         except (ImportError, Exception) as e:
             logger.debug("CuPy CUDA not available: %s", e)
 
@@ -138,12 +144,18 @@ class GPUAccelerator:
     def _try_rocm(self) -> bool:  # pragma: no cover
         """Try to initialize AMD ROCm backend via PyTorch."""
         try:
-            import torch
+            torch = importlib.import_module("torch")
 
-            if torch.cuda.is_available():
+            if (
+                getattr(torch, "cuda", None) is not None
+                and torch.cuda.is_available()
+            ):
                 return False
 
-            if hasattr(torch, "hip") and torch.hip.is_available():
+            if (
+                hasattr(torch, "hip")
+                and getattr(torch.hip, "is_available", lambda: False)()
+            ):
                 self._torch = torch
                 self.torch_device = torch.device("cuda")
                 self.backend = AcceleratorType.ROCM
@@ -156,9 +168,14 @@ class GPUAccelerator:
     def _try_opencl(self) -> bool:  # pragma: no cover
         """Try to initialize OpenCL backend."""
         try:
-            import pyopencl as cl
+            cl = importlib.import_module("pyopencl")
 
-            platforms = cl.get_platforms()
+            try:
+                platforms = cl.get_platforms()
+            except Exception as e:
+                logger.debug("OpenCL platform enumeration failed: %s", e)
+                return False
+
             if not platforms:
                 return False
 
@@ -173,10 +190,11 @@ class GPUAccelerator:
                         self._cl_queue = cl.CommandQueue(self._cl_ctx)
                         self.backend = AcceleratorType.OPENCL
                         logger.info(
-                            "Using OpenCL acceleration: %s", devices[0].name,
+                            "Using OpenCL acceleration: %s",
+                            devices[0].name,
                         )
                         return True
-                except cl.RuntimeError:
+                except Exception:
                     continue
         except ImportError:
             pass
@@ -186,7 +204,8 @@ class GPUAccelerator:
         """Set up CPU multiprocessing backend."""
         self.backend = AcceleratorType.CPU
         logger.info(
-            "Using CPU multiprocessing with %d cores", self.num_cpus,
+            "Using CPU multiprocessing with %d cores",
+            self.num_cpus,
         )
 
     @property
@@ -218,10 +237,18 @@ class GPUAccelerator:
         """Resize a batch of images using the best available backend."""
         if not images:
             return []
-        if self.backend == AcceleratorType.CUDA and self._torch is not None:  # pragma: no cover
-            return self._resize_batch_torch(images, target_size)  # pragma: no cover
-        if self.backend == AcceleratorType.CUDA and self._cp is not None:  # pragma: no cover
-            return self._resize_batch_cupy(images, target_size)  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._torch is not None
+        ):  # pragma: no cover
+            return self._resize_batch_torch(
+                images, target_size
+            )  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._cp is not None
+        ):  # pragma: no cover
+            return self._resize_batch_cupy(
+                images, target_size
+            )  # pragma: no cover
         return self._resize_batch_cpu(images, target_size)
 
     def _resize_batch_torch(  # pragma: no cover
@@ -229,8 +256,10 @@ class GPUAccelerator:
         images: list[np.ndarray],
         target_size: tuple[int, int],
     ) -> list[np.ndarray]:
-        import torch.nn.functional as functional
+        torch_nn_functional = importlib.import_module("torch.nn.functional")
+        functional = torch_nn_functional
 
+        assert self._torch is not None
         results = []
         target_h, target_w = target_size[1], target_size[0]
         for img in images:
@@ -250,7 +279,10 @@ class GPUAccelerator:
                 align_corners=False,
             )
             result = (
-                resized.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                resized.squeeze(0)
+                .permute(1, 2, 0)
+                .cpu()
+                .numpy()
                 .astype(np.uint8)
             )
             if result.shape[2] == 1:
@@ -263,8 +295,10 @@ class GPUAccelerator:
         images: list[np.ndarray],
         target_size: tuple[int, int],
     ) -> list[np.ndarray]:
-        from cupyx.scipy.ndimage import zoom
+        cupyx_ndimage = importlib.import_module("cupyx.scipy.ndimage")
+        zoom = getattr(cupyx_ndimage, "zoom")
 
+        assert self._cp is not None
         results = []
         for img in images:
             if len(img.shape) == 2:
@@ -296,30 +330,36 @@ class GPUAccelerator:
         ]
 
     def compute_dct_batch(
-        self, images: list[np.ndarray],
+        self,
+        images: list[np.ndarray],
     ) -> list[np.ndarray]:
         """Compute DCT for a batch of images (used in pHash)."""
-        if self.backend == AcceleratorType.CUDA and self._torch is not None:  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._torch is not None
+        ):  # pragma: no cover
             return self._dct_batch_torch(images)  # pragma: no cover
-        if self.backend == AcceleratorType.CUDA and self._cp is not None:  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._cp is not None
+        ):  # pragma: no cover
             return self._dct_batch_cupy(images)  # pragma: no cover
         return self._dct_batch_cpu(images)
 
     def _dct_batch_torch(  # pragma: no cover
-        self, images: list[np.ndarray],
+        self,
+        images: list[np.ndarray],
     ) -> list[np.ndarray]:
         results = []
         for img in images:
-            tensor = (
-                self._torch.from_numpy(img.astype(np.float32))
-                .to(self.torch_device)
+            tensor = self._torch.from_numpy(img.astype(np.float32)).to(
+                self.torch_device
             )
             dct = self._torch.fft.fft2(tensor).real
             results.append(dct.cpu().numpy())
         return results
 
     def _dct_batch_cupy(  # pragma: no cover
-        self, images: list[np.ndarray],
+        self,
+        images: list[np.ndarray],
     ) -> list[np.ndarray]:
         results = []
         for img in images:
@@ -329,7 +369,8 @@ class GPUAccelerator:
         return results
 
     def _dct_batch_cpu(
-        self, images: list[np.ndarray],
+        self,
+        images: list[np.ndarray],
     ) -> list[np.ndarray]:
         from scipy.fftpack import dct
 
@@ -356,14 +397,24 @@ class GPUAccelerator:
             [h.flatten() for h in hashes],
         ).astype(np.float32)
 
-        if self.backend == AcceleratorType.CUDA and self._torch is not None:  # pragma: no cover
-            return self._similarity_matrix_torch(hash_matrix, n)  # pragma: no cover
-        if self.backend == AcceleratorType.CUDA and self._cp is not None:  # pragma: no cover
-            return self._similarity_matrix_cupy(hash_matrix, n)  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._torch is not None
+        ):  # pragma: no cover
+            return self._similarity_matrix_torch(
+                hash_matrix, n
+            )  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._cp is not None
+        ):  # pragma: no cover
+            return self._similarity_matrix_cupy(
+                hash_matrix, n
+            )  # pragma: no cover
         return self._similarity_matrix_cpu(hash_matrix, n)
 
     def _similarity_matrix_torch(  # pragma: no cover
-        self, hash_matrix: np.ndarray, n: int,
+        self,
+        hash_matrix: np.ndarray,
+        n: int,
     ) -> np.ndarray:
         gpu_hashes = self._torch.from_numpy(hash_matrix).to(self.torch_device)
         h1 = gpu_hashes.unsqueeze(1)
@@ -374,7 +425,9 @@ class GPUAccelerator:
         return similarity.cpu().numpy()
 
     def _similarity_matrix_cupy(  # pragma: no cover
-        self, hash_matrix: np.ndarray, n: int,
+        self,
+        hash_matrix: np.ndarray,
+        n: int,
     ) -> np.ndarray:
         gpu_hashes = self._cp.asarray(hash_matrix)
         h1 = gpu_hashes[:, self._cp.newaxis, :]
@@ -385,7 +438,9 @@ class GPUAccelerator:
         return self._cp.asnumpy(similarity)
 
     def _similarity_matrix_cpu(
-        self, hash_matrix: np.ndarray, n: int,
+        self,
+        hash_matrix: np.ndarray,
+        n: int,
     ) -> np.ndarray:
         from scipy.spatial.distance import cdist
 
@@ -401,9 +456,12 @@ class GPUAccelerator:
 
         def hex_to_binary(hex_str: str) -> np.ndarray:
             return np.array(
-                [int(b) for b in bin(int(hex_str, 16))[2:].zfill(
-                    len(hex_str) * 4,
-                )],
+                [
+                    int(b)
+                    for b in bin(int(hex_str, 16))[2:].zfill(
+                        len(hex_str) * 4,
+                    )
+                ],
             )
 
         arr1 = np.vstack(
@@ -413,24 +471,30 @@ class GPUAccelerator:
             [hex_to_binary(h) for h in hashes2],
         ).astype(np.float32)
 
-        if self.backend == AcceleratorType.CUDA and self._torch is not None:  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._torch is not None
+        ):  # pragma: no cover
             return self._batch_hamming_torch(arr1, arr2)  # pragma: no cover
-        if self.backend == AcceleratorType.CUDA and self._cp is not None:  # pragma: no cover
+        if (
+            self.backend == AcceleratorType.CUDA and self._cp is not None
+        ):  # pragma: no cover
             return self._batch_hamming_cupy(arr1, arr2)  # pragma: no cover
         return self._batch_hamming_cpu(arr1, arr2)
 
     def _batch_hamming_torch(  # pragma: no cover
-        self, arr1: np.ndarray, arr2: np.ndarray,
+        self,
+        arr1: np.ndarray,
+        arr2: np.ndarray,
     ) -> np.ndarray:
         gpu1 = self._torch.from_numpy(arr1).to(self.torch_device)
         gpu2 = self._torch.from_numpy(arr2).to(self.torch_device)
-        distances = (
-            gpu1.unsqueeze(1) != gpu2.unsqueeze(0)
-        ).float().sum(dim=2)
+        distances = (gpu1.unsqueeze(1) != gpu2.unsqueeze(0)).float().sum(dim=2)
         return distances.cpu().numpy()
 
     def _batch_hamming_cupy(  # pragma: no cover
-        self, arr1: np.ndarray, arr2: np.ndarray,
+        self,
+        arr1: np.ndarray,
+        arr2: np.ndarray,
     ) -> np.ndarray:
         gpu1 = self._cp.asarray(arr1)
         gpu2 = self._cp.asarray(arr2)
@@ -441,7 +505,9 @@ class GPUAccelerator:
         return self._cp.asnumpy(distances)
 
     def _batch_hamming_cpu(
-        self, arr1: np.ndarray, arr2: np.ndarray,
+        self,
+        arr1: np.ndarray,
+        arr2: np.ndarray,
     ) -> np.ndarray:
         from scipy.spatial.distance import cdist
 
@@ -501,7 +567,7 @@ def compute_phash_gpu(
 
 
 def compute_similarity_matrix_gpu(
-    hashes: list[str | np.ndarray],
+    hashes: Sequence[str | np.ndarray],
     hash_size: int = 16,
 ) -> np.ndarray:
     """Compute pairwise similarity matrix for hashes using GPU."""
@@ -510,21 +576,23 @@ def compute_similarity_matrix_gpu(
         return np.array([])
 
     if isinstance(hashes[0], str):
+
         def hex_to_binary(hex_str: str) -> np.ndarray:
             try:
                 bits = bin(int(hex_str, 16))[2:].zfill(
                     hash_size * hash_size,
                 )
                 return np.array(
-                    [int(b) for b in bits], dtype=np.uint8,
+                    [int(b) for b in bits],
+                    dtype=np.uint8,
                 )
             except ValueError:
                 return np.zeros(hash_size * hash_size, dtype=np.uint8)
 
-        hash_arrays = [hex_to_binary(h) for h in hashes]
+        hash_arrays = [hex_to_binary(h) for h in hashes if isinstance(h, str)]
     else:
         hash_arrays = [
-            h.flatten() if hasattr(h, "flatten") else np.array(h)
+            h.flatten() if isinstance(h, np.ndarray) else np.array(h)
             for h in hashes
         ]
 

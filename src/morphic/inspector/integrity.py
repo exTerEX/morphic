@@ -122,11 +122,14 @@ def check_video(path: str) -> dict:
     try:
         cmd = [
             "ffprobe",
-            "-v", "error",
-            "-select_streams", "v:0",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
             "-show_entries",
             "stream=codec_name,width,height,duration",
-            "-of", "csv=p=0",
+            "-of",
+            "csv=p=0",
             path,
         ]
         proc = subprocess.run(
@@ -205,10 +208,12 @@ def check_files(
             try:
                 results.append(future.result())
             except Exception as e:
-                results.append({
-                    "path": futures[future],
-                    "valid": False,
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "path": futures[future],
+                        "valid": False,
+                        "error": str(e),
+                    }
+                )
 
     return sorted(results, key=lambda r: r["path"])

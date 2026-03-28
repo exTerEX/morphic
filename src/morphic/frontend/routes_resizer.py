@@ -43,9 +43,11 @@ def api_start_resize():
         return jsonify({"error": "width and height must be positive"}), 400
 
     if mode not in RESIZE_MODES:
-        return jsonify({
-            "error": f"mode must be one of {RESIZE_MODES}",
-        }), 400
+        return jsonify(
+            {
+                "error": f"mode must be one of {RESIZE_MODES}",
+            }
+        ), 400
 
     job_id = start_job(
         folder=folder,
@@ -71,16 +73,18 @@ def api_scan_status(job_id: str):
         end = job.finished_at if job.finished_at else time.time()
         elapsed = end - job.started_at
 
-    return jsonify({
-        "id": job.id,
-        "status": job.status,
-        "progress": job.progress,
-        "message": job.message,
-        "error": job.error,
-        "total_files": job.total_files,
-        "processed_files": job.processed_files,
-        "elapsed_seconds": round(elapsed, 1),
-    })
+    return jsonify(
+        {
+            "id": job.id,
+            "status": job.status,
+            "progress": job.progress,
+            "message": job.message,
+            "error": job.error,
+            "total_files": job.total_files,
+            "processed_files": job.processed_files,
+            "elapsed_seconds": round(elapsed, 1),
+        }
+    )
 
 
 @bp.route("/scan/<job_id>/results")
@@ -93,9 +97,11 @@ def api_scan_results(job_id: str):
     if job.status not in ("done", "error"):
         return jsonify({"error": "Job not finished yet"}), 409
 
-    return jsonify({
-        "results": job.results,
-        "errors": job.errors,
-        "total_files": job.total_files,
-        "processed_files": job.processed_files,
-    })
+    return jsonify(
+        {
+            "results": job.results,
+            "errors": job.errors,
+            "total_files": job.total_files,
+            "processed_files": job.processed_files,
+        }
+    )

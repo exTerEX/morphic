@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import os
-from unittest.mock import patch
 
 import pytest
 from PIL import Image
 
-from morphic.inspector.exif import edit_exif, read_exif, strip_exif, strip_exif_batch
+from morphic.inspector.exif import (
+    edit_exif,
+    read_exif,
+    strip_exif,
+    strip_exif_batch,
+)
 
 
 def _make_jpeg(path: str, size: tuple[int, int] = (50, 50)) -> str:

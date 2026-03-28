@@ -17,13 +17,30 @@ from morphic.shared.constants import (
 # Only the "primary" extension for each format.
 
 _CANONICAL_IMAGE: set[str] = {
-    ".jpg", ".png", ".tif", ".bmp", ".webp",
-    ".gif", ".ico", ".heic", ".heif", ".avif",
+    ".jpg",
+    ".png",
+    ".tif",
+    ".bmp",
+    ".webp",
+    ".gif",
+    ".ico",
+    ".heic",
+    ".heif",
+    ".avif",
 }
 
 _CANONICAL_VIDEO: set[str] = {
-    ".mp4", ".mov", ".avi", ".mkv", ".webm",
-    ".flv", ".wmv", ".m4v", ".mpeg", ".3gp", ".ts",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".webm",
+    ".flv",
+    ".wmv",
+    ".m4v",
+    ".mpeg",
+    ".3gp",
+    ".ts",
 }
 
 
@@ -39,13 +56,11 @@ def _normalise(ext: str) -> str:
 # actually write to.  Raw/vector/exotic formats are read-only.
 
 _CONVERTIBLE_IMAGE: set[str] = {
-    ext for ext in IMAGE_EXTENSIONS
-    if _normalise(ext) in _CANONICAL_IMAGE
+    ext for ext in IMAGE_EXTENSIONS if _normalise(ext) in _CANONICAL_IMAGE
 }
 
 _CONVERTIBLE_VIDEO: set[str] = {
-    ext for ext in VIDEO_EXTENSIONS
-    if _normalise(ext) in _CANONICAL_VIDEO
+    ext for ext in VIDEO_EXTENSIONS if _normalise(ext) in _CANONICAL_VIDEO
 }
 
 IMAGE_CONVERSIONS: dict[str, list[str]] = {

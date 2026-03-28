@@ -77,6 +77,19 @@ uv sync --extra gpu     # NVIDIA CUDA via PyTorch + CuPy
 uv sync --extra heif    # HEIF/HEIC support via pillow-heif
 ```
 
+> GPU environment requirements
+> - Use Python 3.10-3.13 for the torchvision/CuPy stack (PyTorch 1.13.x + CuPy 13.x).
+> - Set up a dedicated venv with `python3.11 -m venv .venv` and activate it before running `uv sync --extra gpu`.
+> - On Python 3.14 the recommended GPU extras are skipped because PyTorch/CuPy wheels are not yet published for that interpreter in this branch.
+
+> GPU note for GTX 10-series (sm_61):
+> - This repository uses `torch` from the optional `gpu` group.
+> - For NVIDIA GeForce GTX 1070, install torch 1.13.x (CUDA 11.6/11.7) in a Python 3.11 environment
+>   (`torch>=1.13.1,<2.0.0`), because newer PyTorch binary builds drop support for sm_61.
+> - Example:
+>   `pip install torch==1.13.1+cu116 torchvision==0.14.1+cu116 -f https://download.pytorch.org/whl/torch_stable.html`
+> - Then `uv sync --extra gpu` can resolve `cupy` and `pyopencl` components normally.
+
 ## Development
 
 ```bash

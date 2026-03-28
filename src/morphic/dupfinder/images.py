@@ -27,7 +27,6 @@ from morphic.shared.constants import (
 )
 from morphic.shared.utils import (
     find_files_by_extension,
-    format_file_size,
 )
 
 logger = logging.getLogger(__name__)
@@ -166,11 +165,14 @@ class ImageDuplicateFinder:
     def find_images(self, folder: str) -> list[str]:
         """Find all image files in a folder recursively."""
         return find_files_by_extension(
-            folder, IMAGE_EXTENSIONS, EXCLUDED_FOLDERS,
+            folder,
+            IMAGE_EXTENSIONS,
+            EXCLUDED_FOLDERS,
         )
 
     def process_images(
-        self, image_files: list[str],
+        self,
+        image_files: list[str],
     ) -> dict[str, ImageInfo]:
         """Process all images and compute their hashes."""
         logger.info("Processing images and computing hashes...")
@@ -195,12 +197,15 @@ class ImageDuplicateFinder:
                     logger.error("Error processing %s: %s", image_path, e)
 
         logger.info(
-            "Successfully processed %d images", len(self.image_infos),
+            "Successfully processed %d images",
+            len(self.image_infos),
         )
         return self.image_infos
 
     def compute_similarity(
-        self, info1: ImageInfo, info2: ImageInfo,
+        self,
+        info1: ImageInfo,
+        info2: ImageInfo,
     ) -> float:
         """Compute similarity between two images based on their hashes."""
         similarities: list[float] = []
@@ -230,9 +235,7 @@ class ImageDuplicateFinder:
             similarity = 1 - (distance / max_distance)
             similarities.append(similarity)
 
-        return (
-            sum(similarities) / len(similarities) if similarities else 0.0
-        )
+        return sum(similarities) / len(similarities) if similarities else 0.0
 
     def find_duplicates_fast(
         self,
@@ -254,11 +257,9 @@ class ImageDuplicateFinder:
                 exact_groups.append(group)
                 processed.update(paths)
 
-        remaining = [
-            p for p in self.image_infos if p not in processed
-        ]
+        remaining = [p for p in self.image_infos if p not in processed]
 
-        if self.use_gpu and len(remaining) > 50:
+        if self.use_gpu and len(remaining) > 1:
             near_groups = self._find_near_duplicates_gpu(remaining)
         else:
             near_groups = self._find_near_duplicates(remaining)
@@ -266,7 +267,8 @@ class ImageDuplicateFinder:
         return exact_groups + near_groups
 
     def _find_near_duplicates_gpu(
-        self, image_paths: list[str],
+        self,
+        image_paths: list[str],
     ) -> list[list[tuple[str, float]]]:
         """Find near-duplicate images using GPU-accelerated similarity."""
         n = len(image_paths)
@@ -274,7 +276,8 @@ class ImageDuplicateFinder:
             return []
 
         logger.info(
-            "Computing similarity matrix for %d images using GPU...", n,
+            "Computing similarity matrix for %d images using GPU...",
+            n,
         )
 
         all_hashes: list[str] = []
@@ -304,11 +307,13 @@ class ImageDuplicateFinder:
             if _compute_similarity_matrix_gpu is None:
                 raise RuntimeError("GPU not initialized")
             sim_matrix = _compute_similarity_matrix_gpu(
-                valid_hashes, self.hash_size,
+                valid_hashes,
+                self.hash_size,
             )
         except Exception as e:
             logger.warning(
-                "GPU similarity failed, falling back to CPU: %s", e,
+                "GPU similarity failed, falling back to CPU: %s",
+                e,
             )
             return self._find_near_duplicates(image_paths)
 
@@ -341,7 +346,8 @@ class ImageDuplicateFinder:
         return duplicate_groups
 
     def _find_near_duplicates(
-        self, image_paths: list[str],
+        self,
+        image_paths: list[str],
     ) -> list[list[tuple[str, float]]]:
         """Find near-duplicate images using pairwise comparison."""
         n = len(image_paths)
@@ -425,6 +431,7 @@ class ImageDuplicateFinder:
                     duplicate_groups.append(current_group)
 
         logger.info(
-            "Found %d groups of duplicates", len(duplicate_groups),
+            "Found %d groups of duplicates",
+            len(duplicate_groups),
         )
         return duplicate_groups

@@ -106,8 +106,35 @@ def main() -> None:
     print(f"  Open in browser: {url}")
     print("  Press Ctrl+C to stop\n")
 
+    browser_opened = False
     if not args.no_browser and not args.debug:
-        webbrowser.open(url)
+        try:
+            browser_opened = webbrowser.open(url)
+            if not browser_opened:
+                # fallback to a platform-specific browser if available
+                for browser_name in [
+                    "windows-default",
+                    "macosx",
+                    "gnome",
+                    "kde",
+                    "safari",
+                    "firefox",
+                    "chrome",
+                ]:
+                    try:
+                        if webbrowser.get(browser_name).open(url):
+                            browser_opened = True
+                            break
+                    except Exception:
+                        continue
+        except Exception as exc:
+            logging.debug("Could not open browser: %s", exc)
+
+        if not browser_opened:
+            print(
+                "  Warning: Could not automatically open the browser. Please open the URL manually:"
+            )
+            print(f"  {url}\n")
 
     try:
         app.run(host=args.host, port=args.port, debug=args.debug)

@@ -80,7 +80,8 @@ class TestGenerateVideoThumbnail:
         jpeg_bytes = buf.getvalue()
 
         mock_run.return_value = MagicMock(
-            returncode=0, stdout=jpeg_bytes,
+            returncode=0,
+            stdout=jpeg_bytes,
         )
         result = generate_video_thumbnail("/test/video.mp4")
         assert result is not None
@@ -114,7 +115,8 @@ class TestGenerateVideoThumbnail:
         img.save(buf, format="JPEG")
 
         mock_run.return_value = MagicMock(
-            returncode=0, stdout=buf.getvalue(),
+            returncode=0,
+            stdout=buf.getvalue(),
         )
         result = generate_video_thumbnail("/test/video.mp4", size=150)
         assert result is not None

@@ -120,26 +120,28 @@ def _run_resize(job: ScanJob) -> None:
                     bg_color=job.bg_color,
                     quality=job.quality,
                 )
-                new_size = (
-                    os.path.getsize(dest) if os.path.isfile(dest) else 0
+                new_size = os.path.getsize(dest) if os.path.isfile(dest) else 0
+                job.results.append(
+                    {
+                        "source": path,
+                        "destination": dest,
+                        "status": "ok",
+                        "original_size": original_size,
+                        "new_size": new_size,
+                        "original_size_fmt": format_file_size(original_size),
+                        "new_size_fmt": format_file_size(new_size),
+                    }
                 )
-                job.results.append({
-                    "source": path,
-                    "destination": dest,
-                    "status": "ok",
-                    "original_size": original_size,
-                    "new_size": new_size,
-                    "original_size_fmt": format_file_size(original_size),
-                    "new_size_fmt": format_file_size(new_size),
-                })
             except Exception as e:
                 job.errors.append({"path": path, "error": str(e)})
-                job.results.append({
-                    "source": path,
-                    "destination": None,
-                    "status": "error",
-                    "error": str(e),
-                })
+                job.results.append(
+                    {
+                        "source": path,
+                        "destination": None,
+                        "status": "error",
+                        "error": str(e),
+                    }
+                )
 
             job.processed_files = i + 1
             job.progress = (i + 1) / job.total_files

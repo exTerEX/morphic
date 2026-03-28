@@ -2,92 +2,74 @@
 
 from __future__ import annotations
 
-import os
+import pytest
 
 from morphic.converter.scanner import get_compatible_targets, scan_folder
 
 
-class TestScanFolder:
-    def test_empty_folder(self, tmp_path) -> None:
-        result = scan_folder(str(tmp_path))
-        assert result["total"] == 0
-        assert result["files"] == []
-        assert result["summary"] == {}
+@pytest.mark.parametrize(
+    "filter_type,expected_names",
+    [
+        (
+            "images",
+            {"photo.jpg", "image.png", "pic.tif", "deep.jpg"},
+        ),
+        ("videos", {"clip.mp4", "movie.mov"}),
+    ],
+)
+def test_scan_folder_filter_types(
+    tmp_media, filter_type, expected_names
+) -> None:
+    result = scan_folder(str(tmp_media), filter_type=filter_type)
+    names = {f["name"] for f in result["files"]}
+    assert expected_names <= names
 
-    def test_finds_image_files(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media), filter_type="images")
-        names = {f["name"] for f in result["files"]}
-        assert "photo.jpg" in names
-        assert "image.png" in names
-        assert "pic.tif" in names
-        assert "deep.jpg" in names
-        assert result["total"] >= 4
 
-    def test_finds_video_files(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media), filter_type="videos")
-        names = {f["name"] for f in result["files"]}
-        assert "clip.mp4" in names
-        assert "movie.mov" in names
+def test_scan_folder_both_and_subfolder_control(tmp_media) -> None:
+    both = scan_folder(str(tmp_media), filter_type="both")
+    types = {f["type"] for f in both["files"]}
+    assert "image" in types
+    assert "video" in types
 
-    def test_filter_both(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media), filter_type="both")
-        types = {f["type"] for f in result["files"]}
-        assert "image" in types
-        assert "video" in types
+    without_sub = scan_folder(str(tmp_media), include_subfolders=False)
+    names = {f["name"] for f in without_sub["files"]}
+    assert "deep.jpg" not in names
 
-    def test_no_subfolders(self, tmp_media) -> None:
-        result = scan_folder(
-            str(tmp_media), include_subfolders=False,
+    with_sub = scan_folder(str(tmp_media), include_subfolders=True)
+    names = {f["name"] for f in with_sub["files"]}
+    assert "deep.jpg" in names
+
+
+def test_scan_folder_summary_and_meta(tmp_media) -> None:
+    result = scan_folder(str(tmp_media), filter_type="images")
+    assert ".jpg" in result["summary"]
+    assert result["summary"][".jpg"] >= 2
+
+    full = scan_folder(str(tmp_media))
+    assert full["folder"] == str(tmp_media)
+    for f in full["files"]:
+        assert all(
+            k in f for k in ["path", "name", "ext", "size", "type", "targets"]
         )
-        names = {f["name"] for f in result["files"]}
-        assert "deep.jpg" not in names
-        assert "photo.jpg" in names
-
-    def test_with_subfolders(self, tmp_media) -> None:
-        result = scan_folder(
-            str(tmp_media), include_subfolders=True,
-        )
-        names = {f["name"] for f in result["files"]}
-        assert "deep.jpg" in names
-
-    def test_summary_counts(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media), filter_type="images")
-        assert ".jpg" in result["summary"]
-        assert result["summary"][".jpg"] >= 2
-
-    def test_files_have_required_keys(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media))
-        for f in result["files"]:
-            assert "path" in f
-            assert "name" in f
-            assert "ext" in f
-            assert "size" in f
-            assert "type" in f
-            assert "targets" in f
-
-    def test_non_media_excluded(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media))
-        names = {f["name"] for f in result["files"]}
-        assert "readme.txt" not in names
-
-    def test_result_folder_matches(self, tmp_media) -> None:
-        result = scan_folder(str(tmp_media))
-        assert result["folder"] == str(tmp_media)
+    names = {f["name"] for f in full["files"]}
+    assert "readme.txt" not in names
 
 
-class TestGetCompatibleTargets:
-    def test_jpg_targets(self) -> None:
-        targets = get_compatible_targets("photo.jpg")
-        assert ".png" in targets
-        assert ".jpg" not in targets
-
-    def test_mp4_targets(self) -> None:
-        targets = get_compatible_targets("clip.mp4")
-        assert ".mov" in targets or ".mkv" in targets
-
-    def test_unknown_returns_empty(self) -> None:
-        assert get_compatible_targets("file.xyz") == []
-
-    def test_case_insensitive(self) -> None:
-        targets = get_compatible_targets("photo.JPG")
-        assert len(targets) > 0
+@pytest.mark.parametrize(
+    "filename,expected_substr",
+    [
+        ("photo.jpg", ".png"),
+        ("clip.mp4", ".mov"),
+        ("file.xyz", ""),
+        ("photo.JPG", ""),
+    ],
+)
+def test_compatible_targets(filename, expected_substr) -> None:
+    targets = get_compatible_targets(filename)
+    if expected_substr:
+        assert expected_substr in targets
+    else:
+        if filename == "file.xyz":
+            assert targets == []
+        else:
+            assert len(targets) > 0

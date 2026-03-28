@@ -21,6 +21,7 @@ class TestInspectorScanner:
 
         # Poll until done
         import time
+
         for _ in range(50):
             job = get_job(job_id)
             if job and job.status in ("done", "error"):
@@ -41,6 +42,7 @@ class TestInspectorScanner:
         job_id = start_job(str(tmp_path), mode="integrity")
 
         import time
+
         for _ in range(50):
             job = get_job(job_id)
             if job and job.status in ("done", "error"):
