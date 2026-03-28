@@ -66,8 +66,6 @@ morphic --port 9000 --folder ~/Pictures --no-browser
 ```bash
 # Ubuntu / Debian
 sudo apt install ffmpeg
-# macOS
-brew install ffmpeg
 ```
 
 ### Optional Extras
@@ -100,50 +98,6 @@ make lint       # Lint (ruff + pyright)
 make format     # Auto-format
 make docs       # Build Sphinx documentation
 make clean      # Remove build artifacts
-```
-
-## Project Structure
-
-```
-morphic/
-├── src/morphic/
-│   ├── __init__.py              # Package root, version
-│   ├── shared/                  # Constants, utils, thumbnails, file browser
-│   ├── converter/               # Format conversion engine
-│   ├── dupfinder/               # Duplicate detection
-│   ├── inspector/               # EXIF metadata & file integrity
-│   │   ├── exif.py
-│   │   ├── integrity.py
-│   │   └── scanner.py
-│   ├── resizer/                 # Batch image resizing
-│   │   ├── operations.py
-│   │   └── scanner.py
-│   ├── organizer/               # Date sorting & batch renaming
-│   │   ├── date_sorter.py
-│   │   ├── renamer.py
-│   │   └── scanner.py
-│   └── frontend/                # Flask web UI
-│       ├── app.py
-│       ├── routes_shared.py
-│       ├── routes_converter.py
-│       ├── routes_dupfinder.py
-│       ├── routes_inspector.py
-│       ├── routes_resizer.py
-│       ├── routes_organizer.py
-│       ├── templates/
-│       └── static/
-├── tests/                       # 430+ tests
-│   ├── shared/
-│   ├── converter/
-│   ├── dupfinder/
-│   ├── inspector/
-│   ├── resizer/
-│   ├── organizer/
-│   └── frontend/
-├── docs/                        # Sphinx documentation (furo theme)
-├── pyproject.toml
-├── Makefile
-└── README.md
 ```
 
 ## Documentation
