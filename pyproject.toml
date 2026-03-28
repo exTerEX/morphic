@@ -49,9 +49,10 @@ dependencies = [
 
 [project.optional-dependencies]
 heif = ["pillow-heif>=0.13.0"]
-# GPU stack: support older CUDA architectures (sm_61) on GTX 1070 by pinning to torch 1.13.x
 gpu = [
-    "torch==1.13.1; python_version >= '3.10' and python_version < '3.12'",
+    "torch==1.13.1; sys_platform == 'darwin' and python_version >= '3.10' and python_version < '3.12'",
+    "torch==1.13.1+cu117; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version >= '3.10' and python_version < '3.12'",
+    "torch==1.13.1+cu117; sys_platform == 'win32' and platform_machine == 'AMD64' and python_version >= '3.10' and python_version < '3.12'",
     "cupy-cuda11x==13.6.0; sys_platform != 'darwin' and python_version >= '3.10' and python_version < '3.12'",
     "pyopencl>=2023.1",
 ]
@@ -73,8 +74,8 @@ build-backend = "uv_build"
 package = true
 required-environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "sys_platform == 'linux'",
-    "sys_platform == 'win32'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
 ]
 
 [tool.uv.build-backend]

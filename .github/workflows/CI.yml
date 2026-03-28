@@ -31,13 +31,17 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - name: Install ffmpeg (Ubuntu)
+    - name: Install ffmpeg and tkinter (Ubuntu)
       if: startsWith(matrix.os, 'ubuntu')
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg python3-tk
 
-    - name: Install ffmpeg (macOS)
+    - name: Install ffmpeg and tkinter (macOS)
       if: startsWith(matrix.os, 'macos')
-      run: brew install ffmpeg
+      run: |
+        brew install ffmpeg
+        brew install python-tk || true
 
     - name: Install ffmpeg (Windows)
       if: startsWith(matrix.os, 'windows')
