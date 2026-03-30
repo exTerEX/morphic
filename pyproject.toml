@@ -63,7 +63,7 @@ Repository = "https://github.com/exTerEX/morphic"
 Issues = "https://github.com/exTerEX/morphic/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.11,<0.11.0"]
+requires = ["uv_build>=0.9.11,<0.12.0"]
 build-backend = "uv_build"
 
 # ── UV configuration ──────────────────────────────────────────────────────────
