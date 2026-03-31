@@ -3,6 +3,7 @@ package shared
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"os/exec"
 	"path/filepath"
@@ -118,13 +119,73 @@ func GenerateVideoThumbnail(path string, size int) ([]byte, error) {
 }
 
 func extractVideoFrame(videoPath, seekTime string, size int) ([]byte, error) {
-	return extractImageFrame(videoPath, seekTime, size)
+	img, err := extractImageFromFFmpeg(videoPath, seekTime, size)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, imaging.Fit(img, size, size, imaging.Lanczos), &jpeg.Options{Quality: DefaultThumbnailQuality}); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 func extractImageFrame(imagePath, seekTime string, size int) ([]byte, error) {
+	img, err := extractImageFromFFmpeg(imagePath, seekTime, size)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, imaging.Fit(img, size, size, imaging.Lanczos), &jpeg.Options{Quality: DefaultThumbnailQuality}); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func extractImageFromFFmpeg(srcPath, seekTime string, size int) (image.Image, error) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return nil, fmt.Errorf("ffmpeg not found: %w", err)
+	}
+
 	cmd := exec.Command("ffmpeg",
 		"-ss", seekTime,
-		"-i", imagePath,
+		"-i", srcPath,
+		"-frames:v", "1",
+		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size, size),
+		"-f", "image2pipe",
+		"-vcodec", "png",
+		"pipe:1",
+	)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		// Fallback to mjpeg if png codec is not available.
+		fallback, fallbackErr := extractImageFromFFmpegFallback(srcPath, seekTime, size)
+		if fallbackErr == nil {
+			return fallback, nil
+		}
+		return nil, fmt.Errorf("ffmpeg failed (png): %w, stderr: %s; fallback: %v", err, stderr.String(), fallbackErr)
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(stdout.Bytes()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode ffmpeg output: %w", err)
+	}
+
+	return img, nil
+}
+
+func extractImageFromFFmpegFallback(srcPath, seekTime string, size int) (image.Image, error) {
+	cmd := exec.Command("ffmpeg",
+		"-ss", seekTime,
+		"-i", srcPath,
 		"-frames:v", "1",
 		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size, size),
 		"-f", "image2pipe",
@@ -138,10 +199,15 @@ func extractImageFrame(imagePath, seekTime string, size int) ([]byte, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("ffmpeg failed: %w, stderr: %s", err, stderr.String())
+		return nil, fmt.Errorf("ffmpeg fallback failed: %w, stderr: %s", err, stderr.String())
 	}
 
-	return stdout.Bytes(), nil
+	img, _, err := image.Decode(bytes.NewReader(stdout.Bytes()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode ffmpeg fallback output: %w", err)
+	}
+
+	return img, nil
 }
 
 // IsImageFile checks if a path has an image extension.

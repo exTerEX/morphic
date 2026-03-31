@@ -107,7 +107,7 @@ func handleThumbnail(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "thumbnail generation failed", "detail": err.Error()})
 		return
 	}
 

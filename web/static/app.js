@@ -78,6 +78,47 @@ async function convLoadFormats() {
     }
 }
 
+// Thumbnail lazy-loading helper
+let lazyThumbnailObserver = null;
+
+function initLazyThumbnailObserver() {
+    if (lazyThumbnailObserver) {
+        return;
+    }
+    if (!('IntersectionObserver' in window)) {
+        return;
+    }
+
+    lazyThumbnailObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) {
+                continue;
+            }
+            const img = entry.target;
+            const dataSrc = img.dataset.src;
+            if (dataSrc) {
+                img.src = dataSrc;
+                img.removeAttribute('data-src');
+            }
+            lazyThumbnailObserver.unobserve(img);
+        }
+    }, {
+        rootMargin: '400px',
+        threshold: 0.01,
+    });
+}
+
+function observeThumbnails(container) {
+    if (!lazyThumbnailObserver) {
+        initLazyThumbnailObserver();
+    }
+    if (!lazyThumbnailObserver) {
+        return;
+    }
+    const images = container.querySelectorAll('img[data-src]');
+    images.forEach(img => lazyThumbnailObserver.observe(img));
+}
+
 // Dupfinder state
 let dupJobId = null;
 let dupPollTimer = null;
@@ -373,7 +414,7 @@ function renderConvResults() {
         const failed = convLastFailedFiles.has(f.path);
 
         thtml += `<tr data-path="${escapeAttr(f.path)}" class="${failed ? 'failed-file' : ''}">
-            <td><img src="${thumbUrl}" class="file-thumb" loading="lazy" decoding="async" onclick="openPreview('${escapeAttr(f.path)}', '${f.type}')" onerror="this.style.display='none'" /></td>
+            <td><img data-src="${thumbUrl}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" class="file-thumb" loading="lazy" decoding="async" onclick="openPreview('${escapeAttr(f.path)}', '${f.type}')" onerror="this.style.display='none'" /></td>
             <td>
                 <label class="checkbox-label">
                     <input type="checkbox" class="conv-check" value="${escapeAttr(f.path)}" onchange="convUpdateSelection()">
@@ -406,6 +447,7 @@ function renderConvResults() {
 
     thtml += '</tbody></table>';
     table.innerHTML = thtml;
+    observeThumbnails(table);
     convUpdateBatchTargets();
 }
 
@@ -913,6 +955,7 @@ function dupRenderResults(data) {
     for (const group of dupAllGroups) {
         container.appendChild(dupCreateGroupCard(group));
     }
+    observeThumbnails(container);
 }
 
 function dupCreateGroupCard(group) {
@@ -948,7 +991,7 @@ function dupCreateFileCard(item, isBest) {
     if (item.type === 'video') {
         thumb = `<video src="/api/media?path=${encodeURIComponent(item.path)}" muted preload="metadata"></video>`;
     } else {
-        thumb = `<img src="/api/thumbnail?path=${encodeURIComponent(item.path)}" alt="${escapeAttr(item.filename)}" loading="lazy" />`;
+        thumb = `<img data-src="/api/thumbnail?path=${encodeURIComponent(item.path)}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="${escapeAttr(item.filename)}" loading="lazy" />`;
     }
 
     const badges = [];
