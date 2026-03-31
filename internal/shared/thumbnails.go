@@ -146,68 +146,70 @@ func extractImageFrame(imagePath, seekTime string, size int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func extractImageFromFFmpeg(srcPath, seekTime string, size int) (image.Image, error) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return nil, fmt.Errorf("ffmpeg not found: %w", err)
-	}
-
-	cmd := exec.Command("ffmpeg",
-		"-ss", seekTime,
-		"-i", srcPath,
-		"-frames:v", "1",
-		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size, size),
-		"-f", "image2pipe",
-		"-vcodec", "png",
-		"pipe:1",
-	)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		// Fallback to mjpeg if png codec is not available.
-		fallback, fallbackErr := extractImageFromFFmpegFallback(srcPath, seekTime, size)
-		if fallbackErr == nil {
-			return fallback, nil
+func ffmpegCandidates() []string {
+	var bins []string
+	for _, name := range []string{"ffmpeg"} {
+		if _, err := exec.LookPath(name); err == nil {
+			bins = append(bins, name)
 		}
-		return nil, fmt.Errorf("ffmpeg failed (png): %w, stderr: %s; fallback: %v", err, stderr.String(), fallbackErr)
 	}
-
-	img, _, err := image.Decode(bytes.NewReader(stdout.Bytes()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode ffmpeg output: %w", err)
-	}
-
-	return img, nil
+	return bins
 }
 
-func extractImageFromFFmpegFallback(srcPath, seekTime string, size int) (image.Image, error) {
-	cmd := exec.Command("ffmpeg",
-		"-ss", seekTime,
-		"-i", srcPath,
-		"-frames:v", "1",
-		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size, size),
-		"-f", "image2pipe",
-		"-vcodec", "mjpeg",
-		"-q:v", "5",
-		"pipe:1",
-	)
+// OpenImageFile opens an image from any format supported by imaging or ffmpeg.
+// It uses imaging.Open for common formats and falls back to ffmpeg for formats
+// that imaging cannot handle (e.g. AVIF).
+func OpenImageFile(path string) (image.Image, error) {
+	img, err := imaging.Open(path, imaging.AutoOrientation(true))
+	if err == nil {
+		return img, nil
+	}
+	// imaging failed — try ffmpeg (handles AVIF, HEIC, …)
+	return extractImageFromFFmpeg(path, "00:00:00", 0)
+}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("ffmpeg fallback failed: %w, stderr: %s", err, stderr.String())
+func extractImageFromFFmpeg(srcPath, seekTime string, size int) (image.Image, error) {
+	bins := ffmpegCandidates()
+	if len(bins) == 0 {
+		return nil, fmt.Errorf("ffmpeg not found in PATH")
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(stdout.Bytes()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode ffmpeg fallback output: %w", err)
-	}
+	var lastErr error
+	for _, bin := range bins {
+		for _, codec := range []string{"png", "mjpeg"} {
+			args := []string{"-ss", seekTime, "-i", srcPath, "-frames:v", "1"}
+			if size > 0 {
+				args = append(args, "-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size, size))
+			}
+			args = append(args, "-f", "image2pipe", "-vcodec", codec)
+			if codec == "mjpeg" {
+				args = append(args, "-q:v", "5")
+			}
+			args = append(args, "pipe:1")
 
-	return img, nil
+			var stdout, stderr bytes.Buffer
+			cmd := exec.Command(bin, args...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+
+			if err := cmd.Run(); err != nil {
+				lastErr = fmt.Errorf("%s/%s failed: %w (stderr: %s)", bin, codec, err, stderr.String())
+				continue
+			}
+			if stdout.Len() == 0 {
+				lastErr = fmt.Errorf("%s/%s: no output produced", bin, codec)
+				continue
+			}
+
+			img, _, err := image.Decode(bytes.NewReader(stdout.Bytes()))
+			if err != nil {
+				lastErr = fmt.Errorf("%s/%s: decode failed: %w", bin, codec, err)
+				continue
+			}
+			return img, nil
+		}
+	}
+	return nil, fmt.Errorf("all ffmpeg variants failed for %s: %w", srcPath, lastErr)
 }
 
 // IsImageFile checks if a path has an image extension.

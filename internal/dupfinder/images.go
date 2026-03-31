@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/corona10/goimagehash"
-	"github.com/disintegration/imaging"
 	"github.com/exterex/morphic/internal/shared"
 )
 
@@ -35,7 +34,7 @@ func ComputeImageHashes(path string) ImageInfo {
 	}
 	info.FileSize = st.Size()
 
-	img, err := imaging.Open(path)
+	img, err := shared.OpenImageFile(path)
 	if err != nil {
 		log.Printf("dupfinder: cannot open image %s: %v", path, err)
 		return info

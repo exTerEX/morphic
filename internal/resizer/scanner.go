@@ -14,15 +14,15 @@ type ScanJob struct {
 	shared.Job
 	mu sync.Mutex
 
-	Folder       string           `json:"folder"`
-	Width        int              `json:"width"`
-	Height       int              `json:"height"`
-	Mode         string           `json:"mode"`
-	OutputFolder string           `json:"output_folder,omitempty"`
-	BgColor      string           `json:"bg_color"`
-	Quality      int              `json:"quality"`
-	Total        int              `json:"total"`
-	Processed    int              `json:"processed"`
+	Folder       string                   `json:"folder"`
+	Width        int                      `json:"width"`
+	Height       int                      `json:"height"`
+	Mode         string                   `json:"mode"`
+	OutputFolder string                   `json:"output_folder,omitempty"`
+	BgColor      string                   `json:"bg_color"`
+	Quality      int                      `json:"quality"`
+	Total        int                      `json:"total"`
+	Processed    int                      `json:"processed"`
 	Results      []map[string]interface{} `json:"results,omitempty"`
 	Errors       []map[string]interface{} `json:"errors,omitempty"`
 }
