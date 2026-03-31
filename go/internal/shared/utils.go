@@ -126,6 +126,29 @@ func FormatFileSize(sizeBytes int64) string {
 	return fmt.Sprintf("%.2f TB", size)
 }
 
+// NormaliseExt lowercases and resolves aliases (.jpeg → .jpg).
+func NormaliseExt(ext string) string {
+	ext = strings.ToLower(ext)
+	if alias, ok := Aliases[ext]; ok {
+		return alias
+	}
+	return ext
+}
+
+// IsImage returns true if the file extension is a known image type.
+func IsImage(path string) bool {
+	ext := NormaliseExt(strings.ToLower(filepath.Ext(path)))
+	_, ok := ImageExtensions[ext]
+	return ok
+}
+
+// IsVideo returns true if the file extension is a known video type.
+func IsVideo(path string) bool {
+	ext := NormaliseExt(strings.ToLower(filepath.Ext(path)))
+	_, ok := VideoExtensions[ext]
+	return ok
+}
+
 // FormatDuration formats duration in human-readable format.
 func FormatDuration(seconds float64) string {
 	hours := int(seconds) / 3600
