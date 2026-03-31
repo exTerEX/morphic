@@ -55,7 +55,7 @@ type fileWithDate struct {
 }
 
 // PlanRename creates a rename plan for the given files.
-func PlanRename(files []string, tmpl string, operation string) []RenamePlanEntry {
+func PlanRename(files []string, tmpl string, operation string, startSeq int) []RenamePlanEntry {
 	// Sort by (date, path) for consistent sequencing
 	fwd := make([]fileWithDate, len(files))
 	for i, f := range files {
@@ -72,7 +72,7 @@ func PlanRename(files []string, tmpl string, operation string) []RenamePlanEntry
 	destSet := make(map[string]int) // destination -> first index
 
 	for i, f := range fwd {
-		newName := RenderName(tmpl, f.Path, i+1)
+		newName := RenderName(tmpl, f.Path, startSeq+i)
 		destPath := filepath.Join(filepath.Dir(f.Path), newName)
 
 		entry := RenamePlanEntry{

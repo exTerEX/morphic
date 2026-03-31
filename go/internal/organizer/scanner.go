@@ -14,11 +14,11 @@ type ScanJob struct {
 
 	Folder      string            `json:"folder"`
 	Phase       string            `json:"phase"`
-	ScanType    string            `json:"scan_type"`
 	Template    string            `json:"template"`
 	Destination string            `json:"destination"`
 	Operation   string            `json:"operation"`
 	Mode        string            `json:"mode"`
+	StartSeq    int               `json:"start_seq"`
 	Files       []string          `json:"files,omitempty"`
 	SortPlan    []SortPlanEntry   `json:"sort_plan,omitempty"`
 	RenamePlan  []RenamePlanEntry `json:"rename_plan,omitempty"`
@@ -35,7 +35,7 @@ func init() {
 }
 
 // StartPlanJob starts a new planning job.
-func StartPlanJob(folder, mode, template, destination, operation, scanType string) string {
+func StartPlanJob(folder, mode, template, destination, operation string, startSeq int) string {
 	job := &ScanJob{
 		Job:         shared.NewJob(),
 		Folder:      folder,
@@ -44,7 +44,7 @@ func StartPlanJob(folder, mode, template, destination, operation, scanType strin
 		Template:    template,
 		Destination: destination,
 		Operation:   operation,
-		ScanType:    scanType,
+		StartSeq:    startSeq,
 	}
 	job.Status = shared.JobStatusRunning
 
@@ -78,17 +78,7 @@ func ExecuteJob(id string) bool {
 }
 
 func runPlan(job *ScanJob) {
-	var files []shared.FileInfo
-	var err error
-
-	switch job.ScanType {
-	case "images":
-		files, err = shared.FindImageFiles(job.Folder)
-	case "videos":
-		files, err = shared.FindVideoFiles(job.Folder)
-	default:
-		files, err = shared.FindAllMediaFiles(job.Folder)
-	}
+	files, err := shared.FindAllMediaFiles(job.Folder)
 
 	if err != nil {
 		job.mu.Lock()
@@ -122,7 +112,7 @@ func runPlan(job *ScanJob) {
 		job.SortPlan = plan
 		job.mu.Unlock()
 	case "rename":
-		plan := PlanRename(paths, job.Template, job.Operation)
+		plan := PlanRename(paths, job.Template, job.Operation, job.StartSeq)
 		job.mu.Lock()
 		job.RenamePlan = plan
 		job.mu.Unlock()
@@ -163,4 +153,79 @@ func runExecute(job *ScanJob) {
 	job.Progress = 1.0
 	job.DoneAt = time.Now()
 	job.mu.Unlock()
+}
+
+// GetUnifiedPlan returns the plan entries in a unified format matching the
+// Python API's response (each entry has "source", "destination", "conflict").
+func GetUnifiedPlan(job *ScanJob) []map[string]interface{} {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+
+	if job.Mode == "sort" {
+		plan := make([]map[string]interface{}, len(job.SortPlan))
+		for i, e := range job.SortPlan {
+			entry := map[string]interface{}{
+				"source":      e.Source,
+				"destination": e.Destination,
+			}
+			if e.Status == "conflict" {
+				entry["conflict"] = true
+			}
+			plan[i] = entry
+		}
+		return plan
+	}
+
+	plan := make([]map[string]interface{}, len(job.RenamePlan))
+	for i, e := range job.RenamePlan {
+		entry := map[string]interface{}{
+			"source":      e.Source,
+			"destination": e.Destination,
+		}
+		if e.Status == "conflict" {
+			entry["conflict"] = true
+		}
+		plan[i] = entry
+	}
+	return plan
+}
+
+// GetExecutionResult returns execution stats matching the Python API format.
+func GetExecutionResult(job *ScanJob) map[string]interface{} {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+
+	completed := 0
+	errors := 0
+	skipped := 0
+
+	if job.Mode == "sort" {
+		for _, e := range job.SortPlan {
+			switch e.Status {
+			case "done":
+				completed++
+			case "error":
+				errors++
+			case "conflict", "skipped":
+				skipped++
+			}
+		}
+	} else {
+		for _, e := range job.RenamePlan {
+			switch e.Status {
+			case "done":
+				completed++
+			case "error":
+				errors++
+			case "conflict", "skipped":
+				skipped++
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"completed": completed,
+		"errors":    errors,
+		"skipped":   skipped,
+	}
 }

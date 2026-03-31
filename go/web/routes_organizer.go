@@ -10,20 +10,20 @@ import (
 func registerOrganizerRoutes(r *gin.Engine) {
 	g := r.Group("/api/organizer")
 	{
-		g.POST("/scan", handleOrganizerScan)
-		g.POST("/execute/:id", handleOrganizerExecute)
+		g.POST("/plan", handleOrganizerPlan)
+		g.POST("/execute", handleOrganizerExecute)
 		g.GET("/status/:id", handleOrganizerStatus)
 	}
 }
 
-func handleOrganizerScan(c *gin.Context) {
+func handleOrganizerPlan(c *gin.Context) {
 	var req struct {
 		Folder      string `json:"folder"`
 		Mode        string `json:"mode"`
 		Template    string `json:"template"`
 		Destination string `json:"destination"`
 		Operation   string `json:"operation"`
-		ScanType    string `json:"scan_type"`
+		StartSeq    int    `json:"start_seq"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -35,23 +35,33 @@ func handleOrganizerScan(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "folder is required"})
 		return
 	}
+	if req.StartSeq <= 0 {
+		req.StartSeq = 1
+	}
 
 	jobID := organizer.StartPlanJob(
 		req.Folder, req.Mode, req.Template,
-		req.Destination, req.Operation, req.ScanType,
+		req.Destination, req.Operation, req.StartSeq,
 	)
 
 	c.JSON(http.StatusAccepted, gin.H{"job_id": jobID})
 }
 
 func handleOrganizerExecute(c *gin.Context) {
-	id := c.Param("id")
-	if !organizer.ExecuteJob(id) {
+	var req struct {
+		JobID string `json:"job_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.JobID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "job_id required"})
+		return
+	}
+
+	if !organizer.ExecuteJob(req.JobID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "job not found or not in planned state"})
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{"status": "executing"})
+	c.JSON(http.StatusAccepted, gin.H{"status": "executing", "job_id": req.JobID})
 }
 
 func handleOrganizerStatus(c *gin.Context) {
@@ -62,16 +72,38 @@ func handleOrganizerStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"id":          job.ID,
-		"status":      job.Status,
-		"phase":       job.Phase,
-		"progress":    job.Progress,
-		"message":     job.Message,
-		"error":       job.Error,
-		"total":       job.Total,
-		"processed":   job.Processed,
-		"sort_plan":   job.SortPlan,
-		"rename_plan": job.RenamePlan,
-	})
+	resp := gin.H{
+		"id":       job.ID,
+		"status":   job.Status,
+		"phase":    job.Phase,
+		"mode":     job.Mode,
+		"operation": job.Operation,
+		"progress": job.Progress,
+		"message":  job.Message,
+		"error":    job.Error,
+	}
+
+	// Include plan when planning is done (matches Python's response)
+	if job.Phase == "planned" || job.Phase == "executing" || job.Phase == "done" {
+		plan := organizer.GetUnifiedPlan(job)
+		resp["plan"] = plan
+		resp["plan_count"] = len(plan)
+
+		conflicts := 0
+		for _, entry := range plan {
+			if _, ok := entry["conflict"]; ok {
+				if entry["conflict"] == true {
+					conflicts++
+				}
+			}
+		}
+		resp["conflicts"] = conflicts
+	}
+
+	// Include execution results when done
+	if job.Phase == "done" {
+		resp["execution"] = organizer.GetExecutionResult(job)
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
