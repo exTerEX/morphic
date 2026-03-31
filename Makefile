@@ -50,16 +50,16 @@ clean:
 .PHONY: go-build go-test go-run go-vet go-tidy
 
 go-tidy:
-	cd go && go mod tidy
+	go mod tidy
 
 go-build: go-tidy
-	cd go && go build -o ../bin/morphic ./cmd/morphic
+	go build -o ./bin/morphic ./cmd/morphic
 
 go-test:
-	cd go && go test ./...
+	go test ./...
 
 go-vet:
-	cd go && go vet ./...
+	go vet ./...
 
 go-run: go-build
 	./bin/morphic

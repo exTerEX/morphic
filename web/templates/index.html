@@ -37,7 +37,7 @@
             <div class="form-group">
                 <label for="convFolder">Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="convFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <input type="text" id="convFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
                     <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('converter')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="convBrowser">
@@ -151,7 +151,7 @@
             <div class="form-group">
                 <label for="dupFolder">Folder to scan</label>
                 <div class="folder-input-row">
-                    <input type="text" id="dupFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <input type="text" id="dupFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
                     <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('dupfinder')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="dupBrowser">
@@ -244,7 +244,7 @@
             <div class="form-group">
                 <label for="inspFolder">Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="inspFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <input type="text" id="inspFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
                     <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('inspector')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="inspBrowser">
@@ -309,7 +309,7 @@
             <div class="form-group">
                 <label for="resFolder">Source Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="resFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <input type="text" id="resFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
                     <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('resizer')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="resBrowser">
@@ -399,7 +399,7 @@
             <div class="form-group">
                 <label for="orgFolder">Source Folder</label>
                 <div class="folder-input-row">
-                    <input type="text" id="orgFolder" placeholder="Enter a path…" value="{{ initial_folder }}" />
+                    <input type="text" id="orgFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
                     <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('organizer')">📁 Browse</button>
                 </div>
                 <div class="folder-browser" id="orgBrowser">

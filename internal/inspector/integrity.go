@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,33 @@ func CheckImage(path string) IntegrityResult {
 
 	if r.Size == 0 {
 		r.Error = "Zero-byte file"
+		return r
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	if alias, ok := shared.Aliases[ext]; ok {
+		ext = alias
+	}
+
+	if ext == ".avif" {
+		// Use ffprobe for AVIF validation because imaging may not decode it.
+		cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height", "-of", "csv=p=0", path)
+		out, err := cmd.Output()
+		if err != nil {
+			r.Error = err.Error()
+			return r
+		}
+		parts := strings.Split(strings.TrimSpace(string(out)), ",")
+		if len(parts) >= 2 {
+			r.Width, _ = strconv.Atoi(parts[1])
+		}
+		if len(parts) >= 3 {
+			r.Height, _ = strconv.Atoi(parts[2])
+		}
+		if len(parts) >= 1 {
+			r.Format = parts[0]
+		}
+		r.Valid = true
 		return r
 	}
 

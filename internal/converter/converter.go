@@ -86,9 +86,15 @@ func ConvertImage(source, targetExt, outputDir string) (string, error) {
 			strings.TrimSuffix(filepath.Base(dest), ext)+"_converted"+ext)
 	}
 
+	sourceExt := shared.NormaliseExt(strings.ToLower(filepath.Ext(source)))
+	if sourceExt == ".avif" || ext == ".avif" {
+		return convertImageByFFmpeg(source, dest, ext)
+	}
+
 	img, err := imaging.Open(source)
 	if err != nil {
-		return "", err
+		// Relax: fallback to ffmpeg conversion for special unsupported formats
+		return convertImageByFFmpeg(source, dest, ext)
 	}
 
 	opts := []imaging.EncodeOption{}
@@ -103,6 +109,41 @@ func ConvertImage(source, targetExt, outputDir string) (string, error) {
 
 	return dest, nil
 }
+
+func convertImageByFFmpeg(source, dest, ext string) (string, error) {
+	if !ffmpegAvailable() {
+		return "", fmt.Errorf("ffmpeg is not installed or not on PATH")
+	}
+
+	cmd := []string{"ffmpeg", "-y", "-i", source}
+
+	extLower := strings.ToLower(ext)
+	if extLower == ".avif" {
+		if ffmpegHasEncoder("libsvtav1") {
+			cmd = append(cmd, "-c:v", "libsvtav1", "-crf", "28", "-preset", "fast")
+		} else if ffmpegHasEncoder("libaom-av1") {
+			cmd = append(cmd, "-c:v", "libaom-av1", "-crf", "28", "-preset", "fast")
+		} else {
+			cmd = append(cmd, "-c:v", "libx264")
+		}
+	} else if extLower == ".webp" {
+		cmd = append(cmd, "-c:v", "libwebp")
+	} else if extLower == ".png" || extLower == ".jpg" || extLower == ".jpeg" || extLower == ".bmp" || extLower == ".gif" {
+		// no explicit codec required
+	} else {
+		// generic fallback for unknown image extensions
+	}
+
+	cmd = append(cmd, dest)
+
+	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("ffmpeg image conversion failed: %s", strings.TrimSpace(string(out)))
+	}
+
+	return dest, nil
+}
+
 
 // ConvertVideo converts a video file using ffmpeg.
 func ConvertVideo(source, targetExt, outputDir string, av1CRF int) (string, error) {

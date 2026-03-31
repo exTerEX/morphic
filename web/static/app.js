@@ -373,7 +373,7 @@ function renderConvResults() {
         const failed = convLastFailedFiles.has(f.path);
 
         thtml += `<tr data-path="${escapeAttr(f.path)}" class="${failed ? 'failed-file' : ''}">
-            <td><img src="${thumbUrl}" class="file-thumb" onclick="openPreview('${escapeAttr(f.path)}', '${f.type}')" onerror="this.style.display='none'" /></td>
+            <td><img src="${thumbUrl}" class="file-thumb" loading="lazy" decoding="async" onclick="openPreview('${escapeAttr(f.path)}', '${f.type}')" onerror="this.style.display='none'" /></td>
             <td>
                 <label class="checkbox-label">
                     <input type="checkbox" class="conv-check" value="${escapeAttr(f.path)}" onchange="convUpdateSelection()">

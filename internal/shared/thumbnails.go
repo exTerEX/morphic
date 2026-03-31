@@ -41,9 +41,35 @@ func GenerateImageThumbnail(path string, size int) ([]byte, error) {
 	}
 	thumbnailCache.mu.RUnlock()
 
+	ext := strings.ToLower(filepath.Ext(path))
+	if alias, ok := Aliases[ext]; ok {
+		ext = alias
+	}
+
+	if ext == ".avif" {
+		data, err := extractImageFrame(path, "00:00:00", size)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate AVIF thumbnail %s: %w", path, err)
+		}
+
+		thumbnailCache.mu.Lock()
+		thumbnailCache.store[cacheKey] = data
+		thumbnailCache.mu.Unlock()
+
+		return data, nil
+	}
+
 	img, err := imaging.Open(path, imaging.AutoOrientation(true))
 	if err != nil {
-		return nil, fmt.Errorf("failed to open image %s: %w", path, err)
+		// Fallback to ffmpeg for formats that imaging can't decode.
+		ffData, ffErr := extractImageFrame(path, "00:00:00", size)
+		if ffErr == nil {
+			thumbnailCache.mu.Lock()
+			thumbnailCache.store[cacheKey] = ffData
+			thumbnailCache.mu.Unlock()
+			return ffData, nil
+		}
+		return nil, fmt.Errorf("failed to open image %s: %w (ffmpeg fallback: %v)", path, err, ffErr)
 	}
 
 	thumb := imaging.Fit(img, size, size, imaging.Lanczos)
@@ -92,10 +118,14 @@ func GenerateVideoThumbnail(path string, size int) ([]byte, error) {
 }
 
 func extractVideoFrame(videoPath, seekTime string, size int) ([]byte, error) {
+	return extractImageFrame(videoPath, seekTime, size)
+}
+
+func extractImageFrame(imagePath, seekTime string, size int) ([]byte, error) {
 	cmd := exec.Command("ffmpeg",
 		"-ss", seekTime,
-		"-i", videoPath,
-		"-vframes", "1",
+		"-i", imagePath,
+		"-frames:v", "1",
 		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size, size),
 		"-f", "image2pipe",
 		"-vcodec", "mjpeg",

@@ -34,7 +34,8 @@ func SetupRouter() *gin.Engine {
 
 	// Index route
 	r.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.html", nil)
+		initialFolder := ""
+		c.HTML(http.StatusOK, "index.html", gin.H{"initial_folder": initialFolder})
 	})
 
 	// Register API route groups
