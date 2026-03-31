@@ -106,3 +106,4 @@ temp/
 
 # PyPI
 .pypirc
+bin/

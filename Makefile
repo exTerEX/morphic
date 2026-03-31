@@ -43,4 +43,23 @@ clean:
 	rm -rf .coverage
 	rm -rf .ruff_cache/
 	rm -rf docs/_build/
+	rm -rf bin/
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+# Go targets
+.PHONY: go-build go-test go-run go-vet go-tidy
+
+go-tidy:
+	cd go && go mod tidy
+
+go-build: go-tidy
+	cd go && go build -o ../bin/morphic ./cmd/morphic
+
+go-test:
+	cd go && go test ./...
+
+go-vet:
+	cd go && go vet ./...
+
+go-run: go-build
+	./bin/morphic
