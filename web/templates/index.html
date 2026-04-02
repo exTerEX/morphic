@@ -14,8 +14,6 @@
     <nav class="tab-bar">
         <button class="tab-btn active" data-tab="converter" onclick="switchTab('converter')">🔄 Converter</button>
         <button class="tab-btn" data-tab="dupfinder" onclick="switchTab('dupfinder')">🔍 Dupfinder</button>
-        <button class="tab-btn" data-tab="inspector" onclick="switchTab('inspector')">🏷️ Inspector</button>
-        <button class="tab-btn" data-tab="resizer" onclick="switchTab('resizer')">📐 Resizer</button>
         <button class="tab-btn" data-tab="organizer" onclick="switchTab('organizer')">📂 Organizer</button>
     </nav>
 </header>
@@ -83,6 +81,19 @@
         </div>
     </div>
 
+    <!-- Scan Progress -->
+    <div class="card progress-section" id="convScanProgress">
+        <div class="card-title"><span class="spinner"></span> Scanning folder...</div>
+        <div class="progress-bar-track">
+            <div class="progress-bar-fill indeterminate"></div>
+        </div>
+        <div class="progress-info">
+            <span></span>
+            <span id="convScanElapsed">0s</span>
+        </div>
+        <div class="progress-message" id="convScanProgressMsg">Walking folder tree...</div>
+    </div>
+
     <!-- Convert Progress -->
     <div class="card progress-section" id="convProgress">
         <div class="card-title"><span class="spinner"></span> Converting...</div>
@@ -93,6 +104,9 @@
             <span id="convProgressPct">0%</span>
         </div>
         <div class="progress-message" id="convProgressMsg">Starting...</div>
+        <div style="margin-top:12px;">
+            <button class="btn btn-stop btn-sm" id="convStopBtn" onclick="convStopConvert()">⏹ Stop</button>
+        </div>
     </div>
 
     <!-- Scan Results -->
@@ -122,11 +136,6 @@
                     <option value="intersection">Common only (safer)</option>
                     <option value="union">All compatible</option>
                 </select>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
-                AV1 CRF:
-                <input id="convAv1Crf" type="range" min="18" max="48" step="1" value="32" oninput="document.getElementById('convAv1CrfValue').textContent = this.value;" style="margin-left:4px;">
-                <span id="convAv1CrfValue" style="font-weight:600;min-width:30px;text-align:center;">32</span>
             </label>
             <span id="convBatchModeHint" style="font-size:12px;color:var(--text-dim);">Intersection = formats supported by each selected file; Union = any selected file</span>
             <button class="btn btn-primary btn-sm" id="convBatchBtn" onclick="convConvertBatch()">🔄 Convert Selected</button>
@@ -231,160 +240,6 @@
 </div>
 </div>
 
-<!-- ================================================================== -->
-<!-- INSPECTOR TAB                                                       -->
-<!-- ================================================================== -->
-<div class="tab-content" id="tab-inspector">
-<div class="container">
-
-    <div class="card">
-        <div class="card-title"><span class="icon">🏷️</span> Inspect Files</div>
-
-        <div class="form-row" style="margin-bottom:14px;">
-            <div class="form-group">
-                <label for="inspFolder">Folder</label>
-                <div class="folder-input-row">
-                    <input type="text" id="inspFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
-                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('inspector')">📁 Browse</button>
-                </div>
-                <div class="folder-browser" id="inspBrowser">
-                    <div class="fb-header">
-                        <span class="fb-path">~</span>
-                        <button class="btn btn-ghost btn-sm" onclick="closeBrowser('inspector')">✕</button>
-                    </div>
-                    <div class="fb-item fb-parent" style="display:none">
-                        <span class="icon">⬆️</span> ..
-                    </div>
-                    <div class="fb-entries"></div>
-                    <div class="fb-footer">
-                        <button class="btn btn-primary btn-sm" onclick="selectBrowserFolder('inspector')">✓ Use this folder</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px;">
-            <div class="form-group narrow">
-                <label for="inspMode">Mode</label>
-                <select id="inspMode">
-                    <option value="exif">EXIF metadata</option>
-                    <option value="integrity">File integrity</option>
-                </select>
-            </div>
-        </div>
-
-        <button class="btn btn-primary" id="inspScanBtn" onclick="inspStartScan()">🔍 Start Scan</button>
-    </div>
-
-    <!-- Progress -->
-    <div class="card progress-section" id="inspProgress">
-        <div class="card-title"><span class="spinner"></span> Scanning...</div>
-        <div class="progress-bar-track">
-            <div class="progress-bar-fill" id="inspProgressBar"></div>
-        </div>
-        <div class="progress-info">
-            <span id="inspProgressPct">0%</span>
-        </div>
-        <div class="progress-message" id="inspProgressMsg">Initializing...</div>
-    </div>
-
-    <!-- Results -->
-    <div id="inspResults" style="display:none;">
-        <div id="inspResultsContent"></div>
-    </div>
-
-</div>
-</div>
-
-<!-- ================================================================== -->
-<!-- RESIZER TAB                                                         -->
-<!-- ================================================================== -->
-<div class="tab-content" id="tab-resizer">
-<div class="container">
-
-    <div class="card">
-        <div class="card-title"><span class="icon">📐</span> Batch Resize</div>
-
-        <div class="form-row" style="margin-bottom:14px;">
-            <div class="form-group">
-                <label for="resFolder">Source Folder</label>
-                <div class="folder-input-row">
-                    <input type="text" id="resFolder" placeholder="Enter a path…" value="{{ .initial_folder }}" />
-                    <button class="btn btn-ghost btn-sm" onclick="openNativeFolderExplorer('resizer')">📁 Browse</button>
-                </div>
-                <div class="folder-browser" id="resBrowser">
-                    <div class="fb-header">
-                        <span class="fb-path">~</span>
-                        <button class="btn btn-ghost btn-sm" onclick="closeBrowser('resizer')">✕</button>
-                    </div>
-                    <div class="fb-item fb-parent" style="display:none">
-                        <span class="icon">⬆️</span> ..
-                    </div>
-                    <div class="fb-entries"></div>
-                    <div class="fb-footer">
-                        <button class="btn btn-primary btn-sm" onclick="selectBrowserFolder('resizer')">✓ Use this folder</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px;">
-            <div class="form-group narrow">
-                <label for="resWidth">Width (px)</label>
-                <input type="number" id="resWidth" placeholder="1920" min="1" value="1920" />
-            </div>
-            <div class="form-group narrow">
-                <label for="resHeight">Height (px)</label>
-                <input type="number" id="resHeight" placeholder="1080" min="1" value="1080" />
-            </div>
-            <div class="form-group narrow">
-                <label for="resMode">Resize mode</label>
-                <select id="resMode">
-                    <option value="fit">Fit (contain)</option>
-                    <option value="fill">Fill (cover + crop)</option>
-                    <option value="stretch">Stretch (exact)</option>
-                    <option value="pad">Pad (letterbox)</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px;">
-            <div class="form-group narrow">
-                <label for="resQuality">Quality</label>
-                <input type="number" id="resQuality" placeholder="90" min="1" max="100" value="90" />
-            </div>
-            <div class="form-group narrow">
-                <label for="resBgColor">Pad color</label>
-                <input type="color" id="resBgColor" value="#000000" />
-            </div>
-            <div class="form-group">
-                <label for="resOutput">Output folder (optional)</label>
-                <input type="text" id="resOutput" placeholder="Leave empty = same folder as source" />
-            </div>
-        </div>
-
-        <button class="btn btn-primary" id="resScanBtn" onclick="resStartResize()">📐 Start Resize</button>
-    </div>
-
-    <!-- Progress -->
-    <div class="card progress-section" id="resProgress">
-        <div class="card-title"><span class="spinner"></span> Resizing...</div>
-        <div class="progress-bar-track">
-            <div class="progress-bar-fill" id="resProgressBar"></div>
-        </div>
-        <div class="progress-info">
-            <span id="resProgressPct">0%</span>
-        </div>
-        <div class="progress-message" id="resProgressMsg">Starting...</div>
-    </div>
-
-    <!-- Results -->
-    <div id="resResults" style="display:none;">
-        <div id="resResultsContent"></div>
-    </div>
-
-</div>
-</div>
 
 <!-- ================================================================== -->
 <!-- ORGANIZER TAB                                                       -->

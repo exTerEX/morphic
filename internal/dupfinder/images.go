@@ -1,6 +1,7 @@
 package dupfinder
 
 import (
+	"context"
 	"log"
 	"math/bits"
 	"os"
@@ -62,13 +63,20 @@ func ComputeImageHashes(path string) ImageInfo {
 }
 
 // ProcessImages hashes all images concurrently and returns successful results.
-func ProcessImages(files []shared.FileInfo, numWorkers int) map[string]*ImageInfo {
+// It stops accepting new work when ctx is cancelled.
+func ProcessImages(ctx context.Context, files []shared.FileInfo, numWorkers int) map[string]*ImageInfo {
 	result := make(map[string]*ImageInfo)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, numWorkers)
 
 	for _, f := range files {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return result
+		default:
+		}
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(fi shared.FileInfo) {

@@ -297,6 +297,17 @@ input[type="range"] {
     width: 0%;
 }
 
+.progress-bar-fill.indeterminate {
+    width: 35%;
+    transition: none;
+    animation: progress-indeterminate 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes progress-indeterminate {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(390%); }
+}
+
 .progress-info {
     display: flex;
     justify-content: space-between;
@@ -811,6 +822,30 @@ input[type="range"] {
 }
 .stat-value { font-size: 28px; font-weight: 700; }
 .stat-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+/* ── Stop Scan Button ─────────────────────────────────────────────── */
+.btn-stop {
+    background: var(--danger);
+    color: #fff;
+}
+.btn-stop:hover:not(:disabled) {
+    background: var(--danger-hover, #b91c1c);
+}
+
+/* ── Scan Interrupted Notice ─────────────────────────────────────── */
+.scan-interrupted {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: var(--radius);
+    color: var(--warning, #f59e0b);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
 
 /* ── Responsive ──────────────────────────────────────────────────── */
 

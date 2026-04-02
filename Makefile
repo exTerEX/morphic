@@ -1,17 +1,17 @@
 # Go targets
-.PHONY: go-build go-test go-run go-vet go-tidy
+.PHONY: build test run vet tidy
 
-go-tidy:
+tidy:
 	go mod tidy
 
-go-build: go-tidy
+build: tidy
 	go build -o ./bin/morphic ./cmd/morphic
 
-go-test:
+test:
 	go test ./...
 
-go-vet:
+vet:
 	go vet ./...
 
-go-run: go-build
+run: build
 	./bin/morphic

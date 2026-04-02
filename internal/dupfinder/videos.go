@@ -1,6 +1,7 @@
 package dupfinder
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/bits"
@@ -18,15 +19,15 @@ import (
 
 // VideoInfo stores information about a video file.
 type VideoInfo struct {
-	Path        string    `json:"path"`
-	Duration    float64   `json:"duration"`
-	FPS         float64   `json:"fps"`
-	FrameCount  int       `json:"frame_count"`
-	Width       int       `json:"width"`
-	Height      int       `json:"height"`
-	FileSize    int64     `json:"file_size"`
-	FrameHashes []uint64  `json:"-"`
-	HasHash     bool      `json:"-"`
+	Path        string   `json:"path"`
+	Duration    float64  `json:"duration"`
+	FPS         float64  `json:"fps"`
+	FrameCount  int      `json:"frame_count"`
+	Width       int      `json:"width"`
+	Height      int      `json:"height"`
+	FileSize    int64    `json:"file_size"`
+	FrameHashes []uint64 `json:"-"`
+	HasHash     bool     `json:"-"`
 }
 
 // ComputeVideoHashes extracts frames and computes perceptual hashes.
@@ -148,13 +149,20 @@ func parseFPS(s string) float64 {
 }
 
 // ProcessVideos hashes all videos concurrently and returns successful results.
-func ProcessVideos(files []shared.FileInfo, numFrames, numWorkers int) map[string]*VideoInfo {
+// It stops accepting new work when ctx is cancelled.
+func ProcessVideos(ctx context.Context, files []shared.FileInfo, numFrames, numWorkers int) map[string]*VideoInfo {
 	result := make(map[string]*VideoInfo)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, numWorkers)
 
 	for _, f := range files {
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return result
+		default:
+		}
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(fi shared.FileInfo) {

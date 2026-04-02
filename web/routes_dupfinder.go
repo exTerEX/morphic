@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/exterex/morphic/internal/dupfinder"
 	"github.com/exterex/morphic/internal/shared"
+	"github.com/gin-gonic/gin"
 )
 
 func registerDupfinderRoutes(r *gin.Engine) {
@@ -16,6 +16,7 @@ func registerDupfinderRoutes(r *gin.Engine) {
 		g.POST("/scan", handleDupfinderScan)
 		g.GET("/scan/:id/status", handleDupfinderStatus)
 		g.GET("/scan/:id/results", handleDupfinderResults)
+		g.POST("/scan/:id/cancel", handleDupfinderCancel)
 		g.POST("/delete", handleDupfinderDelete)
 	}
 }
@@ -71,14 +72,14 @@ func handleDupfinderStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":                   job.ID,
-		"status":               job.Status,
-		"progress":             job.Progress,
-		"message":              job.Message,
-		"error":                job.Error,
+		"id":                    job.ID,
+		"status":                job.Status,
+		"progress":              job.Progress,
+		"message":               job.Message,
+		"error":                 job.Error,
 		"total_files_found":     job.TotalFound,
 		"total_files_processed": job.TotalProcessed,
-		"elapsed_seconds":      round1(elapsed),
+		"elapsed_seconds":       round1(elapsed),
 	})
 }
 
@@ -96,11 +97,22 @@ func handleDupfinderResults(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"image_groups":          job.ImageGroups,
-		"video_groups":          job.VideoGroups,
-		"space_savings":         job.SpaceSavings,
+		"image_groups":            job.ImageGroups,
+		"video_groups":            job.VideoGroups,
+		"space_savings":           job.SpaceSavings,
 		"space_savings_formatted": shared.FormatFileSize(job.SpaceSavings),
 	})
+}
+
+func handleDupfinderCancel(c *gin.Context) {
+	id := c.Param("id")
+	job, ok := dupfinder.GetJob(id)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+	job.Cancel()
+	c.JSON(http.StatusOK, gin.H{"status": "cancelling"})
 }
 
 func handleDupfinderDelete(c *gin.Context) {
@@ -143,8 +155,8 @@ func handleDupfinderDelete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"results":              results,
-		"total_freed":          totalFreed,
+		"results":               results,
+		"total_freed":           totalFreed,
 		"total_freed_formatted": shared.FormatFileSize(totalFreed),
 	})
 }

@@ -15,15 +15,15 @@ type ScanJob struct {
 	shared.Job
 	mu sync.Mutex
 
-	Folder         string                   `json:"folder"`
-	ScanType       string                   `json:"scan_type"` // "images", "videos", "both"
-	ImageThreshold float64                  `json:"image_threshold"`
-	VideoThreshold float64                  `json:"video_threshold"`
+	Folder         string                     `json:"folder"`
+	ScanType       string                     `json:"scan_type"` // "images", "videos", "both"
+	ImageThreshold float64                    `json:"image_threshold"`
+	VideoThreshold float64                    `json:"video_threshold"`
 	ImageGroups    [][]map[string]interface{} `json:"image_groups,omitempty"`
 	VideoGroups    [][]map[string]interface{} `json:"video_groups,omitempty"`
-	TotalFound     int                      `json:"total_files_found"`
-	TotalProcessed int                      `json:"total_files_processed"`
-	SpaceSavings   int64                    `json:"space_savings"`
+	TotalFound     int                        `json:"total_files_found"`
+	TotalProcessed int                        `json:"total_files_processed"`
+	SpaceSavings   int64                      `json:"space_savings"`
 }
 
 var store = shared.NewJobStore[ScanJob]()
@@ -74,9 +74,33 @@ func runScan(job *ScanJob) {
 		scanImages(job)
 	}
 
+	// Check for cancellation between phases
+	select {
+	case <-job.Ctx().Done():
+		job.mu.Lock()
+		job.Status = shared.JobStatusCancelled
+		job.DoneAt = time.Now()
+		job.Message = "Scan was interrupted"
+		job.mu.Unlock()
+		return
+	default:
+	}
+
 	// Video scan
 	if job.ScanType == "videos" || job.ScanType == "both" {
 		scanVideos(job)
+	}
+
+	// Check for cancellation before finalising
+	select {
+	case <-job.Ctx().Done():
+		job.mu.Lock()
+		job.Status = shared.JobStatusCancelled
+		job.DoneAt = time.Now()
+		job.Message = "Scan was interrupted"
+		job.mu.Unlock()
+		return
+	default:
 	}
 
 	// Finalise
@@ -112,7 +136,14 @@ func scanImages(job *ScanJob) {
 		return
 	}
 
-	infos := ProcessImages(files, shared.DefaultNumWorkers)
+	infos := ProcessImages(job.Ctx(), files, shared.DefaultNumWorkers)
+
+	// Return early if cancelled during hash processing
+	select {
+	case <-job.Ctx().Done():
+		return
+	default:
+	}
 
 	job.mu.Lock()
 	job.TotalProcessed += len(infos)
@@ -157,7 +188,14 @@ func scanVideos(job *ScanJob) {
 		return
 	}
 
-	infos := ProcessVideos(files, shared.DefaultNumFrames, shared.DefaultNumWorkers)
+	infos := ProcessVideos(job.Ctx(), files, shared.DefaultNumFrames, shared.DefaultNumWorkers)
+
+	// Return early if cancelled during hash processing
+	select {
+	case <-job.Ctx().Done():
+		return
+	default:
+	}
 
 	job.mu.Lock()
 	job.TotalProcessed += len(infos)
@@ -198,17 +236,17 @@ func formatImageGroups(groups [][]DuplicateEntry, infos map[string]*ImageInfo) [
 				continue
 			}
 			formatted = append(formatted, map[string]interface{}{
-				"path":               entry.Path,
-				"filename":           filepath.Base(entry.Path),
-				"directory":          filepath.Dir(entry.Path),
-				"width":              info.Width,
-				"height":             info.Height,
-				"resolution":         fmt.Sprintf("%dx%d", info.Width, info.Height),
-				"format":             info.Format,
-				"file_size":          info.FileSize,
+				"path":                entry.Path,
+				"filename":            filepath.Base(entry.Path),
+				"directory":           filepath.Dir(entry.Path),
+				"width":               info.Width,
+				"height":              info.Height,
+				"resolution":          fmt.Sprintf("%dx%d", info.Width, info.Height),
+				"format":              info.Format,
+				"file_size":           info.FileSize,
 				"file_size_formatted": shared.FormatFileSize(info.FileSize),
-				"similarity":         float64(int(entry.Similarity*1000)) / 10,
-				"type":               "image",
+				"similarity":          float64(int(entry.Similarity*1000)) / 10,
+				"type":                "image",
 			})
 		}
 		if len(formatted) > 1 {
@@ -237,19 +275,19 @@ func formatVideoGroups(groups [][]DuplicateEntry, infos map[string]*VideoInfo) [
 				continue
 			}
 			formatted = append(formatted, map[string]interface{}{
-				"path":               entry.Path,
-				"filename":           filepath.Base(entry.Path),
-				"directory":          filepath.Dir(entry.Path),
-				"width":              info.Width,
-				"height":             info.Height,
-				"resolution":         fmt.Sprintf("%dx%d", info.Width, info.Height),
-				"duration":           info.Duration,
-				"duration_formatted": shared.FormatDuration(info.Duration),
-				"fps":                float64(int(info.FPS*10)) / 10,
-				"file_size":          info.FileSize,
+				"path":                entry.Path,
+				"filename":            filepath.Base(entry.Path),
+				"directory":           filepath.Dir(entry.Path),
+				"width":               info.Width,
+				"height":              info.Height,
+				"resolution":          fmt.Sprintf("%dx%d", info.Width, info.Height),
+				"duration":            info.Duration,
+				"duration_formatted":  shared.FormatDuration(info.Duration),
+				"fps":                 float64(int(info.FPS*10)) / 10,
+				"file_size":           info.FileSize,
 				"file_size_formatted": shared.FormatFileSize(info.FileSize),
-				"similarity":         float64(int(entry.Similarity*1000)) / 10,
-				"type":               "video",
+				"similarity":          float64(int(entry.Similarity*1000)) / 10,
+				"type":                "video",
 			})
 		}
 		if len(formatted) > 1 {

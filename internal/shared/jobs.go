@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -11,11 +12,12 @@ import (
 type JobStatus string
 
 const (
-	JobStatusPending JobStatus = "pending"
-	JobStatusRunning JobStatus = "running"
-	JobStatusDone    JobStatus = "done"
-	JobStatusFailed  JobStatus = "failed"
-	JobStatusPlanned JobStatus = "planned"
+	JobStatusPending   JobStatus = "pending"
+	JobStatusRunning   JobStatus = "running"
+	JobStatusDone      JobStatus = "done"
+	JobStatusFailed    JobStatus = "failed"
+	JobStatusPlanned   JobStatus = "planned"
+	JobStatusCancelled JobStatus = "cancelled"
 )
 
 // Job is a base type embedded in all module-specific jobs.
@@ -27,15 +29,36 @@ type Job struct {
 	Error     string    `json:"error,omitempty"`
 	StartedAt time.Time `json:"started_at"`
 	DoneAt    time.Time `json:"done_at,omitempty"`
+
+	ctx    context.Context    `json:"-"`
+	cancel context.CancelFunc `json:"-"`
 }
 
 // NewJob creates a new job with a unique ID.
 func NewJob() Job {
+	ctx, cancel := context.WithCancel(context.Background())
 	return Job{
 		ID:        uuid.New().String(),
 		Status:    JobStatusPending,
 		Progress:  0,
 		StartedAt: time.Now(),
+		ctx:       ctx,
+		cancel:    cancel,
+	}
+}
+
+// Ctx returns the job's context. It is cancelled when Cancel is called.
+func (j *Job) Ctx() context.Context {
+	if j.ctx == nil {
+		return context.Background()
+	}
+	return j.ctx
+}
+
+// Cancel signals the job to stop. It is safe to call multiple times.
+func (j *Job) Cancel() {
+	if j.cancel != nil {
+		j.cancel()
 	}
 }
 

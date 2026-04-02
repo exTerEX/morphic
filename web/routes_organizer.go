@@ -3,8 +3,8 @@ package web
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/exterex/morphic/internal/organizer"
+	"github.com/gin-gonic/gin"
 )
 
 func registerOrganizerRoutes(r *gin.Engine) {
@@ -13,6 +13,7 @@ func registerOrganizerRoutes(r *gin.Engine) {
 		g.POST("/plan", handleOrganizerPlan)
 		g.POST("/execute", handleOrganizerExecute)
 		g.GET("/status/:id", handleOrganizerStatus)
+		g.POST("/cancel/:id", handleOrganizerCancel)
 	}
 }
 
@@ -73,14 +74,14 @@ func handleOrganizerStatus(c *gin.Context) {
 	}
 
 	resp := gin.H{
-		"id":       job.ID,
-		"status":   job.Status,
-		"phase":    job.Phase,
-		"mode":     job.Mode,
+		"id":        job.ID,
+		"status":    job.Status,
+		"phase":     job.Phase,
+		"mode":      job.Mode,
 		"operation": job.Operation,
-		"progress": job.Progress,
-		"message":  job.Message,
-		"error":    job.Error,
+		"progress":  job.Progress,
+		"message":   job.Message,
+		"error":     job.Error,
 	}
 
 	// Include plan when planning is done (matches Python's response)
@@ -106,4 +107,15 @@ func handleOrganizerStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func handleOrganizerCancel(c *gin.Context) {
+	id := c.Param("id")
+	job, ok := organizer.GetJob(id)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		return
+	}
+	job.Cancel()
+	c.JSON(http.StatusOK, gin.H{"status": "cancelling"})
 }

@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/exterex/morphic/internal/converter"
 	"github.com/exterex/morphic/internal/shared"
+	"github.com/gin-gonic/gin"
 )
 
 var conversionStore = shared.NewJobStore[conversionJob]()
@@ -34,6 +34,7 @@ func registerConverterRoutes(r *gin.Engine) {
 		g.POST("/convert", handleConverterConvert)
 		g.GET("/progress/:id", handleConverterProgress)
 		g.GET("/progress/:id/poll", handleConverterPoll)
+		g.POST("/progress/:id/cancel", handleConverterCancel)
 		g.POST("/delete", handleConverterDelete)
 	}
 }
@@ -111,6 +112,16 @@ func handleConverterConvert(c *gin.Context) {
 
 func runConversion(job *conversionJob, files []string, targetExt string, deleteOriginal bool, av1CRF int) {
 	for i, source := range files {
+		// Check for cancellation before each file
+		select {
+		case <-job.Ctx().Done():
+			job.Status = shared.JobStatusCancelled
+			job.CurrentFile = ""
+			job.DoneAt = time.Now()
+			return
+		default:
+		}
+
 		job.CurrentFile = source
 
 		result := map[string]interface{}{
@@ -257,10 +268,21 @@ func handleConverterDelete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"results":              results,
-		"total_freed":          totalFreed,
+		"results":               results,
+		"total_freed":           totalFreed,
 		"total_freed_formatted": shared.FormatFileSize(totalFreed),
 	})
+}
+
+func handleConverterCancel(c *gin.Context) {
+	id := c.Param("id")
+	job, ok := conversionStore.Get(id)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		return
+	}
+	job.Cancel()
+	c.JSON(http.StatusOK, gin.H{"status": "cancelling"})
 }
 
 func absPath(p string) (string, error) {

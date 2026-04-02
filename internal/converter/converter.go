@@ -104,7 +104,8 @@ func ConvertImage(source, targetExt, outputDir string) (string, error) {
 	}
 
 	if err := imaging.Save(img, dest, opts...); err != nil {
-		return "", err
+		// Fallback to ffmpeg for formats imaging can't encode
+		return convertImageByFFmpeg(source, dest, ext)
 	}
 
 	return dest, nil
@@ -119,10 +120,13 @@ func convertImageByFFmpeg(source, dest, ext string) (string, error) {
 
 	extLower := strings.ToLower(ext)
 	if extLower == ".avif" {
+		// AV1 (YUV 4:2:0) requires even dimensions and no alpha channel.
+		// crop: trim 1px from odd dimensions. format=yuv420p: strip alpha (rgba → yuv420p).
+		cmd = append(cmd, "-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p")
 		if ffmpegHasEncoder("libsvtav1") {
-			cmd = append(cmd, "-c:v", "libsvtav1", "-crf", "28", "-preset", "fast")
+			cmd = append(cmd, "-c:v", "libsvtav1", "-crf", "28", "-preset", "8")
 		} else if ffmpegHasEncoder("libaom-av1") {
-			cmd = append(cmd, "-c:v", "libaom-av1", "-crf", "28", "-preset", "fast")
+			cmd = append(cmd, "-c:v", "libaom-av1", "-crf", "28", "-cpu-used", "4")
 		} else {
 			cmd = append(cmd, "-c:v", "libx264")
 		}
@@ -143,7 +147,6 @@ func convertImageByFFmpeg(source, dest, ext string) (string, error) {
 
 	return dest, nil
 }
-
 
 // ConvertVideo converts a video file using ffmpeg.
 func ConvertVideo(source, targetExt, outputDir string, av1CRF int) (string, error) {
@@ -187,12 +190,24 @@ func ConvertVideo(source, targetExt, outputDir string, av1CRF int) (string, erro
 
 		cmd = []string{"ffmpeg", "-y", "-i", source, "-c:v", encoder, "-c:a", audioCodec}
 
-		if strings.Contains(encoder, "av1") || encoder == "libaom-av1" || encoder == "libsvtav1" {
+		if encoder == "libsvtav1" {
 			crf := 28
 			if av1CRF >= 10 && av1CRF <= 63 {
 				crf = av1CRF
 			}
-			cmd = append(cmd, "-preset", "fast", "-crf", fmt.Sprintf("%d", crf))
+			cmd = append(cmd, "-preset", "8", "-crf", fmt.Sprintf("%d", crf))
+		} else if encoder == "libaom-av1" {
+			crf := 28
+			if av1CRF >= 10 && av1CRF <= 63 {
+				crf = av1CRF
+			}
+			cmd = append(cmd, "-cpu-used", "4", "-crf", fmt.Sprintf("%d", crf))
+		} else if strings.Contains(encoder, "av1") || strings.Contains(encoder, "vpx") {
+			crf := 28
+			if av1CRF >= 10 && av1CRF <= 63 {
+				crf = av1CRF
+			}
+			cmd = append(cmd, "-crf", fmt.Sprintf("%d", crf))
 		} else {
 			cmd = append(cmd, "-preset", "fast", "-crf", "23")
 		}

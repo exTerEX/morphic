@@ -89,6 +89,18 @@ func runPlan(job *ScanJob) {
 		return
 	}
 
+	// Check for cancellation after file discovery
+	select {
+	case <-job.Ctx().Done():
+		job.mu.Lock()
+		job.Status = shared.JobStatusCancelled
+		job.DoneAt = time.Now()
+		job.Message = "Scan was interrupted"
+		job.mu.Unlock()
+		return
+	default:
+	}
+
 	paths := make([]string, len(files))
 	for i, f := range files {
 		paths[i] = f.Path
@@ -118,6 +130,18 @@ func runPlan(job *ScanJob) {
 		job.mu.Unlock()
 	}
 
+	// Check for cancellation after planning
+	select {
+	case <-job.Ctx().Done():
+		job.mu.Lock()
+		job.Status = shared.JobStatusCancelled
+		job.DoneAt = time.Now()
+		job.Message = "Scan was interrupted"
+		job.mu.Unlock()
+		return
+	default:
+	}
+
 	job.mu.Lock()
 	job.Phase = "planned"
 	job.Progress = 1.0
@@ -126,6 +150,18 @@ func runPlan(job *ScanJob) {
 }
 
 func runExecute(job *ScanJob) {
+	// Check for cancellation before starting execution
+	select {
+	case <-job.Ctx().Done():
+		job.mu.Lock()
+		job.Status = shared.JobStatusCancelled
+		job.DoneAt = time.Now()
+		job.Message = "Execution was interrupted"
+		job.mu.Unlock()
+		return
+	default:
+	}
+
 	switch job.Mode {
 	case "sort":
 		ExecuteSort(job.SortPlan, job.Operation)

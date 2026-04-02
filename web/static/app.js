@@ -16,9 +16,12 @@ let convAvailableTargets = [];  // all targets currently available for batch con
 let convAv1Available = false;   // AV1 support from ffmpeg
 let convLastFailedFiles = new Set(); // set of last conversion failures
 let convBatchMode = 'intersection';    // union|intersection
-let convAv1Crf = 32;
+const convAv1Crf = 28;
 let convJobId = null;
 let convPollTimer = null;
+let convScanning = false;           // true while folder scan is in flight
+let convScanController = null;     // AbortController for active scan request
+let convScanElapsedTimer = null;   // interval for scan elapsed counter
 let showFullPaths = false;
 
 async function convLoadFormats() {
@@ -28,20 +31,9 @@ async function convLoadFormats() {
             convBatchMode = savedMode;
         }
 
-        const savedAv1Crf = Number(localStorage.getItem('convAv1Crf'));
-        if (!Number.isNaN(savedAv1Crf) && savedAv1Crf >= 10 && savedAv1Crf <= 63) {
-            convAv1Crf = savedAv1Crf;
-        }
-
         const modeSelect = document.getElementById('convBatchMode');
         if (modeSelect) {
             modeSelect.value = convBatchMode;
-        }
-
-        const av1CrfInput = document.getElementById('convAv1Crf');
-        if (av1CrfInput) {
-            av1CrfInput.value = convAv1Crf;
-            document.getElementById('convAv1CrfValue').textContent = convAv1Crf;
         }
 
         const resp = await fetch('/api/converter/formats');
@@ -124,18 +116,15 @@ let dupJobId = null;
 let dupPollTimer = null;
 let dupAllGroups = [];
 let dupSelectedFiles = new Set();
-
-// Inspector state
-let inspJobId = null;
-let inspPollTimer = null;
-
-// Resizer state
-let resJobId = null;
-let resPollTimer = null;
+let dupRunning = false;
 
 // Organizer state
 let orgJobId = null;
 let orgPollTimer = null;
+let orgRunning = false;
+
+// Converter convert state
+let convConvertJobId = null;
 
 // =====================================================================
 // Tabs
@@ -157,7 +146,6 @@ function switchTab(tab) {
 
 const _browserPrefixes = {
     converter: 'conv', dupfinder: 'dup',
-    inspector: 'insp', resizer: 'res',
     organizer: 'org',
 };
 
@@ -200,7 +188,7 @@ function _loadLastFolder() {
 
 function loadFolderPreferences() {
     lastSelectedFolder = _loadLastFolder();
-    const tabs = ['converter', 'dupfinder', 'inspector', 'resizer', 'organizer'];
+    const tabs = ['converter', 'dupfinder', 'organizer'];
     for (const tab of tabs) {
         const input = document.getElementById(_bp(tab) + 'Folder');
         if (!input) continue;
@@ -261,6 +249,11 @@ async function openNativeFolderExplorer(tab) {
         });
         const data = await resp.json();
 
+        if (data.available === false) {
+            // No native dialog tool — fall back to in-page browser
+            browseTo(initialDir, tab);
+            return;
+        }
         if (data.folder) {
             if (input) {
                 input.value = data.folder;
@@ -268,7 +261,7 @@ async function openNativeFolderExplorer(tab) {
             }
             showToast('Folder selected: ' + data.folder, 'success');
         } else {
-            showToast(data.message || 'Native folder dialog was canceled', 'info');
+            showToast('Native folder dialog was cancelled', 'info');
         }
     } catch (e) {
         showToast('Native folder open failed: ' + e.message, 'error');
@@ -328,6 +321,12 @@ async function browseTo(path, tab) {
 // =====================================================================
 
 async function convScan() {
+    // Toggle: if scan already running, abort it
+    if (convScanning) {
+        if (convScanController) convScanController.abort();
+        return;
+    }
+
     const folder = document.getElementById('convFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
     _storeFolder('converter', folder);
@@ -336,7 +335,8 @@ async function convScan() {
     const includeSubfolders = document.getElementById('convSubfolders').checked;
     const filterType = document.getElementById('convFilterType').value;
 
-    document.getElementById('convScanBtn').disabled = true;
+    convScanController = new AbortController();
+    convSetScanStopMode();
     document.getElementById('convResults').style.display = 'none';
 
     try {
@@ -346,20 +346,65 @@ async function convScan() {
             body: JSON.stringify({
                 folder, include_subfolders: includeSubfolders, filter_type: filterType,
             }),
+            signal: convScanController.signal,
         });
         const data = await resp.json();
-        if (data.error) { showToast(data.error, 'error'); return; }
+        if (data.error) { showToast(data.error, 'error'); convRestoreScanBtn(); return; }
 
         convScanData = data;
         convFilterType = filterType;
         convFilterExt = null;
         convSelectedFiles = [];
+        convRestoreScanBtn();
         renderConvResults();
     } catch (e) {
-        showToast('Scan failed: ' + e.message, 'error');
-    } finally {
-        document.getElementById('convScanBtn').disabled = false;
+        if (e.name === 'AbortError') {
+            convShowScanInterrupted();
+        } else {
+            showToast('Scan failed: ' + e.message, 'error');
+        }
+        convRestoreScanBtn();
     }
+}
+
+function convSetScanStopMode() {
+    convScanning = true;
+    const btn = document.getElementById('convScanBtn');
+    btn.textContent = '⏹ Stop Scan';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-stop');
+    btn.disabled = false;
+
+    // Show scan progress panel with elapsed timer
+    let elapsed = 0;
+    document.getElementById('convScanElapsed').textContent = '0s';
+    document.getElementById('convScanProgressMsg').textContent = 'Walking folder tree...';
+    document.getElementById('convScanProgress').classList.add('active');
+    convScanElapsedTimer = setInterval(() => {
+        elapsed++;
+        document.getElementById('convScanElapsed').textContent = formatDuration(elapsed);
+    }, 1000);
+}
+
+function convRestoreScanBtn() {
+    convScanning = false;
+    convScanController = null;
+    clearInterval(convScanElapsedTimer);
+    convScanElapsedTimer = null;
+    document.getElementById('convScanProgress').classList.remove('active');
+    const btn = document.getElementById('convScanBtn');
+    btn.disabled = false;
+    btn.textContent = '🔍 Scan Folder';
+    btn.classList.remove('btn-stop');
+    btn.classList.add('btn-primary');
+}
+
+function convShowScanInterrupted() {
+    document.getElementById('convResults').style.display = 'block';
+    document.getElementById('convSummary').innerHTML =
+        '<div class="scan-interrupted">⏹ Scan was interrupted — no results to display.</div>';
+    document.getElementById('convFileTable').innerHTML = '';
+    document.getElementById('convBulkBar').style.display = 'none';
 }
 
 function renderConvResults() {
@@ -490,19 +535,6 @@ function convGetBatchTargets() {
     if (modeSelect) {
         convBatchMode = modeSelect.value || 'union';
         localStorage.setItem('convBatchMode', convBatchMode);
-    }
-
-    const av1CrfInput = document.getElementById('convAv1Crf');
-    if (av1CrfInput) {
-        const val = Number(av1CrfInput.value);
-        if (!Number.isNaN(val) && val >= 10 && val <= 63) {
-            convAv1Crf = val;
-            localStorage.setItem('convAv1Crf', convAv1Crf);
-            const av1CrfValue = document.getElementById('convAv1CrfValue');
-            if (av1CrfValue) {
-                av1CrfValue.textContent = String(convAv1Crf);
-            }
-        }
     }
 
     const modeHint = document.getElementById('convBatchModeHint');
@@ -649,6 +681,7 @@ async function convConvertBatch() {
         });
         const data = await resp.json();
         if (data.job_id) {
+            convConvertJobId = data.job_id;
             convShowProgress();
             convPollProgress(data.job_id);
         }
@@ -659,6 +692,8 @@ async function convConvertBatch() {
 }
 
 function convShowProgress() {
+    const stopBtn = document.getElementById('convStopBtn');
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '\u23f9 Stop'; }
     document.getElementById('convProgress').classList.add('active');
 }
 
@@ -682,9 +717,27 @@ function convPollProgress(jobId) {
                 convShowConversionResults(data);
                 document.getElementById('convProgress').classList.remove('active');
                 document.getElementById('convBatchBtn').disabled = false;
+                convConvertJobId = null;
+            } else if (data.status === 'cancelled') {
+                clearInterval(convPollTimer);
+                document.getElementById('convProgress').classList.remove('active');
+                document.getElementById('convBatchBtn').disabled = false;
+                convConvertJobId = null;
+                showToast('Conversion was stopped', 'warning');
             }
         } catch (e) { /* retry */ }
     }, 500);
+}
+
+async function convStopConvert() {
+    if (!convConvertJobId) return;
+    const btn = document.getElementById('convStopBtn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping…';
+    try {
+        await fetch(`/api/converter/progress/${convConvertJobId}/cancel`, { method: 'POST' });
+    } catch (e) { /* ignore */ }
+    // Poll loop will detect 'cancelled'
 }
 
 async function convWaitForJob(jobId) {
@@ -842,6 +895,12 @@ function copyPath(path) {
 // =====================================================================
 
 async function dupStartScan() {
+    // If a scan is already running, act as stop
+    if (dupRunning) {
+        await dupStopScan();
+        return;
+    }
+
     const folder = document.getElementById('dupFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
     _storeFolder('dupfinder', folder);
@@ -850,7 +909,7 @@ async function dupStartScan() {
     const imgThreshold = parseInt(document.getElementById('dupImgThreshold').value) / 100;
     const vidThreshold = parseInt(document.getElementById('dupVidThreshold').value) / 100;
 
-    document.getElementById('dupScanBtn').disabled = true;
+    dupSetStopMode();
     document.getElementById('dupResults').classList.remove('active');
     document.getElementById('dupProgress').classList.add('active');
     document.getElementById('dupProgressBar').style.width = '0%';
@@ -870,15 +929,54 @@ async function dupStartScan() {
         const data = await resp.json();
         if (data.error) {
             showToast(data.error, 'error');
-            dupResetUI();
+            dupRestoreBtn();
             return;
         }
         dupJobId = data.job_id;
         dupPollProgress();
     } catch (e) {
         showToast('Scan failed: ' + e.message, 'error');
-        dupResetUI();
+        dupRestoreBtn();
     }
+}
+
+async function dupStopScan() {
+    if (!dupJobId) { dupRestoreBtn(); return; }
+    const btn = document.getElementById('dupScanBtn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping…';
+    try {
+        await fetch(`/api/dupfinder/scan/${dupJobId}/cancel`, { method: 'POST' });
+    } catch (e) { /* ignore */ }
+    // Poll loop will detect 'cancelled' and call dupRestoreBtn
+}
+
+function dupSetStopMode() {
+    dupRunning = true;
+    const btn = document.getElementById('dupScanBtn');
+    btn.textContent = '⏹ Stop Scan';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-stop');
+    btn.disabled = false;
+}
+
+function dupRestoreBtn() {
+    dupRunning = false;
+    dupJobId = null;
+    const btn = document.getElementById('dupScanBtn');
+    btn.disabled = false;
+    btn.textContent = '🔍 Start Scan';
+    btn.classList.remove('btn-stop');
+    btn.classList.add('btn-primary');
+}
+
+function dupShowInterrupted() {
+    document.getElementById('dupResults').classList.add('active');
+    document.getElementById('dupGroups').innerHTML = '';
+    document.getElementById('dupNoResults').style.display = 'none';
+    document.getElementById('dupTitle').textContent = '';
+    document.getElementById('dupSummary').innerHTML =
+        '<div class="scan-interrupted">⏹ Scan was interrupted — no results to display.</div>';
 }
 
 function dupPollProgress() {
@@ -897,10 +995,16 @@ function dupPollProgress() {
             if (data.status === 'done') {
                 clearInterval(dupPollTimer);
                 await dupLoadResults();
-            } else if (data.status === 'error') {
+            } else if (data.status === 'cancelled') {
+                clearInterval(dupPollTimer);
+                document.getElementById('dupProgress').classList.remove('active');
+                dupShowInterrupted();
+                dupRestoreBtn();
+            } else if (data.status === 'failed') {
                 clearInterval(dupPollTimer);
                 showToast('Scan failed: ' + (data.error || 'Unknown'), 'error');
-                dupResetUI();
+                document.getElementById('dupProgress').classList.remove('active');
+                dupRestoreBtn();
             }
         } catch (e) { /* retry */ }
     }, 500);
@@ -919,18 +1023,18 @@ async function dupLoadResults() {
         dupRenderResults(data);
         document.getElementById('dupProgress').classList.remove('active');
         document.getElementById('dupResults').classList.add('active');
-        dupResetUI();
+        dupRestoreBtn();
 
         document.getElementById('dupNoResults').style.display =
             dupAllGroups.length === 0 ? 'block' : 'none';
     } catch (e) {
         showToast('Failed to load results', 'error');
-        dupResetUI();
+        dupRestoreBtn();
     }
 }
 
 function dupResetUI() {
-    document.getElementById('dupScanBtn').disabled = false;
+    dupRestoreBtn();
 }
 
 // =====================================================================
@@ -1189,255 +1293,6 @@ async function dupExecuteDelete() {
 }
 
 // =====================================================================
-// Inspector Tab
-// =====================================================================
-
-async function inspStartScan() {
-    const folder = document.getElementById('inspFolder').value.trim();
-    if (!folder) { showToast('Enter a folder path', 'error'); return; }
-    _storeFolder('inspector', folder);
-    const mode = document.getElementById('inspMode').value;
-
-    document.getElementById('inspScanBtn').disabled = true;
-    document.getElementById('inspResults').style.display = 'none';
-    document.getElementById('inspProgress').style.display = 'block';
-    document.getElementById('inspProgressBar').style.width = '0%';
-    document.getElementById('inspProgressPct').textContent = '0%';
-    document.getElementById('inspProgressMsg').textContent = 'Starting...';
-
-    try {
-        const resp = await fetch('/api/inspector/scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder, mode }),
-        });
-        const data = await resp.json();
-        if (data.error) { showToast(data.error, 'error'); return; }
-        inspJobId = data.job_id;
-        inspPollTimer = setInterval(inspPollProgress, 800);
-    } catch (e) {
-        showToast('Scan failed: ' + e.message, 'error');
-        document.getElementById('inspProgress').style.display = 'none';
-    } finally {
-        document.getElementById('inspScanBtn').disabled = false;
-    }
-}
-
-async function inspPollProgress() {
-    try {
-        const resp = await fetch(`/api/inspector/scan/${inspJobId}/status`);
-        const data = await resp.json();
-        const total = data.total_files || 0;
-        const processed = data.processed_files || 0;
-        const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-        document.getElementById('inspProgressBar').style.width = pct + '%';
-        document.getElementById('inspProgressPct').textContent = pct + '%';
-        document.getElementById('inspProgressMsg').textContent = `${processed} / ${total} files`;
-
-        if (data.status === 'done' || data.status === 'error') {
-            clearInterval(inspPollTimer);
-            document.getElementById('inspProgress').style.display = 'none';
-            if (data.status === 'error') {
-                showToast('Scan error: ' + (data.error || 'Unknown'), 'error');
-            } else {
-                inspLoadResults();
-            }
-        }
-    } catch (e) {
-        clearInterval(inspPollTimer);
-        showToast('Poll error: ' + e.message, 'error');
-    }
-}
-
-async function inspLoadResults() {
-    try {
-        const resp = await fetch(`/api/inspector/scan/${inspJobId}/results`);
-        const data = await resp.json();
-        const container = document.getElementById('inspResultsContent');
-        const section = document.getElementById('inspResults');
-        section.style.display = 'block';
-
-        if (!data.results || data.results.length === 0) {
-            container.innerHTML = '<div class="card"><div class="empty-state"><div class="icon">📂</div><h3>No files found</h3></div></div>';
-            return;
-        }
-
-        const mode = document.getElementById('inspMode').value;
-        if (mode === 'exif') {
-            inspRenderExif(data.results, container);
-        } else {
-            inspRenderIntegrity(data.results, container);
-        }
-    } catch (e) {
-        showToast('Failed to load results: ' + e.message, 'error');
-    }
-}
-
-function inspRenderExif(results, container) {
-    let html = `<div class="card"><div class="card-title"><span class="icon">📊</span> EXIF Results — ${results.length} file(s)</div></div>`;
-    for (const item of results) {
-        const fname = item.file.split('/').pop();
-        const exif = item.exif || {};
-        const keys = Object.keys(exif).filter(k => !k.startsWith('_'));
-        html += `<div class="card exif-card">
-            <div class="card-title" style="font-size:14px;cursor:pointer;" onclick="this.parentElement.classList.toggle('expanded')">
-                📄 ${escapeHtml(fname)} <span style="color:var(--text-dim);font-weight:normal;margin-left:8px;">${keys.length} tags</span>
-            </div>
-            <div class="exif-details">
-                <div style="display:flex;gap:8px;margin-bottom:10px;">
-                    <button class="btn btn-ghost btn-sm" onclick="inspStripOne('${escapeAttr(item.file)}')">🧹 Strip EXIF</button>
-                </div>
-                <table class="exif-table"><tbody>`;
-        for (const k of keys) {
-            const val = typeof exif[k] === 'object' ? JSON.stringify(exif[k]) : String(exif[k]);
-            html += `<tr><td class="exif-key">${escapeHtml(k)}</td><td>${escapeHtml(val.substring(0, 200))}</td></tr>`;
-        }
-        if (exif._gps_lat && exif._gps_lng) {
-            html += `<tr><td class="exif-key">📍 GPS</td><td>${exif._gps_lat.toFixed(6)}, ${exif._gps_lng.toFixed(6)}</td></tr>`;
-        }
-        html += `</tbody></table></div></div>`;
-    }
-    container.innerHTML = html;
-}
-
-function inspRenderIntegrity(results, container) {
-    let ok = 0, bad = 0;
-    for (const r of results) { if (r.ok) ok++; else bad++; }
-
-    let html = `<div class="card">
-        <div class="card-title"><span class="icon">📊</span> Integrity Results</div>
-        <div class="stat-row">
-            <div class="stat-card"><div class="stat-value" style="color:var(--success)">${ok}</div><div class="stat-label">OK</div></div>
-            <div class="stat-card"><div class="stat-value" style="color:var(--danger)">${bad}</div><div class="stat-label">Errors</div></div>
-            <div class="stat-card"><div class="stat-value">${results.length}</div><div class="stat-label">Total</div></div>
-        </div></div>`;
-
-    if (bad > 0) {
-        html += '<div class="card"><div class="card-title" style="color:var(--danger)">⚠️ Failed Files</div>';
-        for (const r of results.filter(x => !x.ok)) {
-            html += `<div class="integrity-item bad"><span class="file-name">${escapeHtml(r.file.split('/').pop())}</span><span class="integrity-error">${escapeHtml(r.error || 'Unknown error')}</span></div>`;
-        }
-        html += '</div>';
-    }
-    container.innerHTML = html;
-}
-
-async function inspStripOne(filePath) {
-    try {
-        const resp = await fetch('/api/inspector/exif/strip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ files: [filePath] }),
-        });
-        const data = await resp.json();
-        if (data.error) { showToast(data.error, 'error'); return; }
-        showToast('EXIF stripped from 1 file', 'success');
-    } catch (e) {
-        showToast('Strip failed: ' + e.message, 'error');
-    }
-}
-
-// =====================================================================
-// Resizer Tab
-// =====================================================================
-
-async function resStartResize() {
-    const folder = document.getElementById('resFolder').value.trim();
-    if (!folder) { showToast('Enter a folder path', 'error'); return; }
-    _storeFolder('resizer', folder);
-
-    const width = parseInt(document.getElementById('resWidth').value) || 1920;
-    const height = parseInt(document.getElementById('resHeight').value) || 1080;
-    const mode = document.getElementById('resMode').value;
-    const quality = parseInt(document.getElementById('resQuality').value) || 90;
-    const bgColor = document.getElementById('resBgColor').value;
-    const outputFolder = document.getElementById('resOutput').value.trim() || null;
-
-    document.getElementById('resScanBtn').disabled = true;
-    document.getElementById('resResults').style.display = 'none';
-    document.getElementById('resProgress').style.display = 'block';
-    document.getElementById('resProgressBar').style.width = '0%';
-    document.getElementById('resProgressPct').textContent = '0%';
-    document.getElementById('resProgressMsg').textContent = 'Starting...';
-
-    try {
-        const resp = await fetch('/api/resizer/scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder, width, height, mode, quality, bg_color: bgColor, output_folder: outputFolder }),
-        });
-        const data = await resp.json();
-        if (data.error) { showToast(data.error, 'error'); return; }
-        resJobId = data.job_id;
-        resPollTimer = setInterval(resPollProgress, 800);
-    } catch (e) {
-        showToast('Resize failed: ' + e.message, 'error');
-        document.getElementById('resProgress').style.display = 'none';
-    } finally {
-        document.getElementById('resScanBtn').disabled = false;
-    }
-}
-
-async function resPollProgress() {
-    try {
-        const resp = await fetch(`/api/resizer/scan/${resJobId}/status`);
-        const data = await resp.json();
-        const total = data.total_files || 0;
-        const processed = data.processed_files || 0;
-        const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-        document.getElementById('resProgressBar').style.width = pct + '%';
-        document.getElementById('resProgressPct').textContent = pct + '%';
-        document.getElementById('resProgressMsg').textContent = `${processed} / ${total} images`;
-
-        if (data.status === 'done' || data.status === 'error') {
-            clearInterval(resPollTimer);
-            document.getElementById('resProgress').style.display = 'none';
-            if (data.status === 'error') {
-                showToast('Resize error: ' + (data.error || 'Unknown'), 'error');
-            } else {
-                resLoadResults();
-            }
-        }
-    } catch (e) {
-        clearInterval(resPollTimer);
-        showToast('Poll error: ' + e.message, 'error');
-    }
-}
-
-async function resLoadResults() {
-    try {
-        const resp = await fetch(`/api/resizer/scan/${resJobId}/results`);
-        const data = await resp.json();
-        const container = document.getElementById('resResultsContent');
-        const section = document.getElementById('resResults');
-        section.style.display = 'block';
-
-        const results = data.results || [];
-        let ok = 0, errors = 0;
-        for (const r of results) { if (r.status === 'ok') ok++; else errors++; }
-
-        let html = `<div class="card">
-            <div class="card-title"><span class="icon">📊</span> Resize Results</div>
-            <div class="stat-row">
-                <div class="stat-card"><div class="stat-value" style="color:var(--success)">${ok}</div><div class="stat-label">Resized</div></div>
-                <div class="stat-card"><div class="stat-value" style="color:var(--danger)">${errors}</div><div class="stat-label">Errors</div></div>
-                <div class="stat-card"><div class="stat-value">${results.length}</div><div class="stat-label">Total</div></div>
-            </div></div>`;
-
-        if (errors > 0) {
-            html += '<div class="card"><div class="card-title" style="color:var(--danger)">⚠️ Errors</div>';
-            for (const r of results.filter(x => x.status !== 'ok')) {
-                html += `<div class="integrity-item bad"><span class="file-name">${escapeHtml(r.input.split('/').pop())}</span><span class="integrity-error">${escapeHtml(r.error || 'Unknown')}</span></div>`;
-            }
-            html += '</div>';
-        }
-        container.innerHTML = html;
-    } catch (e) {
-        showToast('Failed to load results: ' + e.message, 'error');
-    }
-}
-
-// =====================================================================
 // Organizer Tab
 // =====================================================================
 
@@ -1451,6 +1306,12 @@ function orgModeChanged() {
 }
 
 async function orgStartPlan() {
+    // If planning is running, act as stop
+    if (orgRunning) {
+        await orgStopScan();
+        return;
+    }
+
     const folder = document.getElementById('orgFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
     _storeFolder('organizer', folder);
@@ -1467,7 +1328,7 @@ async function orgStartPlan() {
         body.start_seq = parseInt(document.getElementById('orgStartSeq').value) || 1;
     }
 
-    document.getElementById('orgPlanBtn').disabled = true;
+    orgSetStopMode();
     document.getElementById('orgExecBtn').style.display = 'none';
     document.getElementById('orgPlanResults').style.display = 'none';
     document.getElementById('orgExecResults').style.display = 'none';
@@ -1482,15 +1343,50 @@ async function orgStartPlan() {
             body: JSON.stringify(body),
         });
         const data = await resp.json();
-        if (data.error) { showToast(data.error, 'error'); return; }
+        if (data.error) { showToast(data.error, 'error'); orgRestoreBtn(); return; }
         orgJobId = data.job_id;
         orgPollTimer = setInterval(orgPollStatus, 600);
     } catch (e) {
         showToast('Plan failed: ' + e.message, 'error');
         document.getElementById('orgProgress').style.display = 'none';
-    } finally {
-        document.getElementById('orgPlanBtn').disabled = false;
+        orgRestoreBtn();
     }
+}
+
+async function orgStopScan() {
+    if (!orgJobId) { orgRestoreBtn(); return; }
+    const btn = document.getElementById('orgPlanBtn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping…';
+    try {
+        await fetch(`/api/organizer/cancel/${orgJobId}`, { method: 'POST' });
+    } catch (e) { /* ignore */ }
+    // Poll loop will detect 'cancelled' and call orgRestoreBtn
+}
+
+function orgSetStopMode() {
+    orgRunning = true;
+    const btn = document.getElementById('orgPlanBtn');
+    btn.textContent = '⏹ Stop Scan';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-stop');
+    btn.disabled = false;
+}
+
+function orgRestoreBtn() {
+    orgRunning = false;
+    const btn = document.getElementById('orgPlanBtn');
+    btn.disabled = false;
+    btn.textContent = '📋 Preview Plan';
+    btn.classList.remove('btn-stop');
+    btn.classList.add('btn-primary');
+}
+
+function orgShowInterrupted() {
+    document.getElementById('orgPlanResults').style.display = 'block';
+    document.getElementById('orgPlanContent').innerHTML =
+        '<div class="scan-interrupted">⏹ Scan was interrupted — no results to display.</div>';
+    document.getElementById('orgExecBtn').style.display = 'none';
 }
 
 async function orgPollStatus() {
@@ -1502,18 +1398,25 @@ async function orgPollStatus() {
         document.getElementById('orgProgressBar').style.width = pct + '%';
         document.getElementById('orgProgressPct').textContent = pct + '%';
 
-        if (data.phase === 'planned') {
+        if (data.status === 'cancelled') {
             clearInterval(orgPollTimer);
             document.getElementById('orgProgress').style.display = 'none';
+            orgShowInterrupted();
+            orgRestoreBtn();
+        } else if (data.phase === 'planned') {
+            clearInterval(orgPollTimer);
+            document.getElementById('orgProgress').style.display = 'none';
+            orgRestoreBtn();
             orgRenderPlan(data);
         } else if (data.phase === 'done') {
             clearInterval(orgPollTimer);
             document.getElementById('orgProgress').style.display = 'none';
             orgRenderExecResults(data);
-        } else if (data.phase === 'error' || data.status === 'error') {
+        } else if (data.phase === 'error' || data.status === 'failed') {
             clearInterval(orgPollTimer);
             document.getElementById('orgProgress').style.display = 'none';
             showToast('Error: ' + (data.error || 'Unknown'), 'error');
+            orgRestoreBtn();
         } else {
             document.getElementById('orgProgressMsg').textContent =
                 data.phase === 'executing' ? `Executing...` : `Planning...`;
@@ -1521,6 +1424,7 @@ async function orgPollStatus() {
     } catch (e) {
         clearInterval(orgPollTimer);
         showToast('Poll error: ' + e.message, 'error');
+        orgRestoreBtn();
     }
 }
 

@@ -41,8 +41,6 @@ func SetupRouter() *gin.Engine {
 	// Register API route groups
 	registerSharedRoutes(r)
 	registerOrganizerRoutes(r)
-	registerInspectorRoutes(r)
-	registerResizerRoutes(r)
 	registerConverterRoutes(r)
 	registerDupfinderRoutes(r)
 

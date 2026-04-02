@@ -16,8 +16,6 @@ var canonicalImage = map[string]struct{}{
 	".webp": {},
 	".gif":  {},
 	".ico":  {},
-	".heic": {},
-	".heif": {},
 	".avif": {},
 }
 

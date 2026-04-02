@@ -1,6 +1,7 @@
 package web
 
 import (
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -10,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/exterex/morphic/internal/shared"
+	"github.com/gin-gonic/gin"
 )
 
 func registerSharedRoutes(r *gin.Engine) {
@@ -75,19 +76,27 @@ func handleBrowseDirectory(c *gin.Context) {
 
 // handleBrowseNative opens the OS-native folder picker dialog.
 func handleBrowseNative(c *gin.Context) {
-	folder, err := shared.OpenNativeFolderDialog()
+	folder, available, err := shared.OpenNativeFolderDialog()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if folder == "" {
+	if !available {
 		c.JSON(http.StatusOK, gin.H{
-			"folder":  nil,
-			"message": "Dialog cancelled or unavailable",
+			"folder":    nil,
+			"available": false,
 		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"folder": folder})
+	if folder == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"folder":    nil,
+			"available": true,
+			"cancelled": true,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"folder": folder, "available": true})
 }
 
 func handleThumbnail(c *gin.Context) {
@@ -116,9 +125,9 @@ func handleThumbnail(c *gin.Context) {
 
 func handleSystemInfo(c *gin.Context) {
 	ffmpegInfo := gin.H{
-		"installed":      false,
-		"hwaccels":       []string{},
-		"encoders":       []string{},
+		"installed":       false,
+		"hwaccels":        []string{},
+		"encoders":        []string{},
 		"nvenc_available": false,
 	}
 
@@ -182,4 +191,15 @@ func handleMedia(c *gin.Context) {
 		contentType = "application/octet-stream"
 	}
 	c.File(filePath)
+}
+
+// isDir returns true when path exists and is a directory.
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// round1 rounds f to one decimal place.
+func round1(f float64) float64 {
+	return math.Round(f*10) / 10
 }
