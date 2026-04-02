@@ -1,88 +1,130 @@
 # morphic
 
-Unified media toolkit — format conversion, duplicate detection, EXIF inspection, batch resizing, and file organization in a single tabbed web UI.
+A self-hosted media toolkit — format conversion, duplicate detection, and file organisation in a single dark-themed web UI, built entirely in Go.
+
+[![Build](https://github.com/exterex/morphic/actions/workflows/documentation.yml/badge.svg)](https://github.com/exterex/morphic/actions/workflows/documentation.yml)
+
+---
 
 ## Features
 
-### Converter
+### 🔄 Converter
 
-- **Folder scanning** — enter any path, toggle subfolder recursion, filter by images / videos / both
-- **File summary** — colour-coded bar chart and badge counts per extension
-- **Batch conversion** — select files, pick a target format, convert in one click
-- **Live progress** — real-time progress bar with per-file success / error feedback
-- **Image formats** — jpg, png, tif, bmp, webp, gif, ico, heic, heif, avif (via Pillow)
-- **Video formats** — mp4, mov, avi, mkv, webm, flv, wmv, m4v, mpeg, 3gp, ts (via ffmpeg)
+Convert images and videos between popular formats directly in the browser.
 
-### Dupfinder
+- Scan any folder (with optional subfolder recursion) filtered by images, videos, or both
+- Per-extension summary with badge counts and filter pills
+- Select individual files or batch-select by extension
+- Pick a target format and convert in one click — live progress bar with per-file feedback
+- **Images** — jpg, png, tif, bmp, webp, gif, ico, avif (via the `imaging` library)
+- **Videos** — mp4, mov, avi, mkv, webm, flv, wmv, m4v, mpeg, 3gp, ts (via ffmpeg)
+- Optionally delete originals after a successful conversion
+- Stop an in-flight conversion at any time
 
-- **Perceptual hashing** — find visually similar images and videos, not just exact matches
-- **GPU acceleration** — CUDA (PyTorch/CuPy), ROCm, OpenCL, with CPU fallback
-- **Video analysis** — extract and hash frames to detect duplicate video content
-- **Batch processing** — process thousands of files with configurable thresholds
-- **Space savings** — see how much disk space you'd recover by removing duplicates
+### 🔍 Dupfinder
 
-### Inspector
+Find visually similar media using perceptual hashing — catches re-encoded or resized duplicates that byte-comparison misses.
 
-- **EXIF metadata** — read, edit, and strip EXIF tags from images (via piexif)
-- **Integrity checking** — validate images (Pillow verify + load) and videos (ffprobe)
-- **Background scanning** — scan entire folders with progress tracking
-- **GPS decoding** — automatic DMS-to-decimal coordinate conversion
+- Three hash types combined (pHash, aHash, dHash) for higher accuracy
+- Configurable similarity threshold per type (images: 90 %, videos: 85 % default)
+- Video analysis by comparing frame hashes across a clip
+- Multi-worker concurrent hashing with a configurable worker count
+- Grouped results with thumbnail previews, file sizes, and space-savings estimate
+- One-click auto-select of duplicates (keeps the largest file in each group)
+- Stop scan mid-flight and discard partial results
 
-### Resizer
+### 📂 Organizer
 
-- **Batch resize** — resize images in bulk with configurable dimensions
-- **Four modes** — fit (contain), fill (cover + crop), stretch (exact), pad (letterbox)
-- **Quality control** — configurable JPEG/WebP quality and background color for padding
-- **Format override** — optionally convert output format during resize
+Restructure a media collection into clean date-based folders or rename files in bulk.
 
-### Organizer
+- **Date sort** — moves/copies files into `{year}/{month}/{day}` trees using EXIF date or mtime fallback
+- **Rename** — template tokens: `{date}`, `{datetime}`, `{original}`, `{ext}`, `{seq}`, `{seq:N}` (zero-padded)
+- Preview the full plan before executing — see every source → destination path
+- Move or copy mode
+- Conflict detection — skips renames that would overwrite another file
 
-- **Date sorting** — sort files into date-based folder structures (EXIF → mtime fallback)
-- **Batch renaming** — rename files with template tokens ({date}, {seq}, {original}, {ext})
-- **Plan & execute** — preview the plan before committing (move or copy)
-- **Conflict detection** — automatically detects and skips naming conflicts
-
-### Shared
-
-- **Native folder browser** — OS-native file dialog (tkinter, zenity, kdialog, etc.)
-- **Thumbnail generation** — image and video thumbnails in the web UI
-- **Dark theme** — clean, responsive interface
+---
 
 ## Quick Start
 
 ```bash
-# Build and run with Makefile targets
-git clone <repo>
+git clone https://github.com/exterex/morphic
 cd morphic
-make go-build
-./bin/morphic                      # starts server at http://127.0.0.1:8000
+make build          # compiles to ./bin/morphic
+./bin/morphic       # opens http://127.0.0.1:8000 in the browser
 ```
 
 ```bash
-# With options
+# Custom options
 ./bin/morphic --port 9000 --folder ~/Pictures --no-browser
 ```
 
+---
+
 ## Prerequisites
 
-- Go 1.22+
-- ffmpeg (optional) — required for video conversion
+| Dependency | Required for | Install |
+|---|---|---|
+| Go 1.22+ | Building | https://go.dev/dl/ |
+| ffmpeg | Video conversion & video duplicate detection | `sudo apt install ffmpeg` |
 
-```bash
-# Ubuntu / Debian
-sudo apt install ffmpeg
-```
+ffmpeg is optional — the app starts without it and greys out video features automatically.
+
+---
 
 ## Development
 
 ```bash
-make go-tidy     # sync go.mod/go.sum
-make go-test     # run unit tests
-make go-vet      # static vet checks
-make go-build    # build binary in ./bin/morphic
-make go-run      # build + run dev server
+make tidy    # go mod tidy
+make build   # build binary → ./bin/morphic
+make test    # go test ./...
+make vet     # go vet ./...
+make run     # build + start dev server
 ```
+
+---
+
+## Architecture
+
+```
+cmd/morphic/       CLI entry-point (flags, server startup)
+internal/
+  converter/       Folder scanner, image/video conversion logic
+  dupfinder/       Perceptual hashing, duplicate grouping, job runner
+  organizer/       Date sorter, batch renamer, plan executor
+  shared/          Job store, file browser, thumbnail generator, constants
+web/
+  server.go        Gin router, embedded static assets
+  routes_*.go      HTTP handlers per module
+  templates/       index.html (single-page UI)
+  static/          app.js, style.css
+```
+
+---
+
+## API Overview
+
+All endpoints are under `/api/`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/converter/scan` | Scan a folder for convertible media |
+| `POST` | `/api/converter/convert` | Start a batch conversion job |
+| `GET`  | `/api/converter/progress/:id/poll` | Poll conversion progress |
+| `POST` | `/api/converter/progress/:id/cancel` | Cancel a running conversion |
+| `POST` | `/api/dupfinder/scan` | Start a duplicate scan job |
+| `GET`  | `/api/dupfinder/scan/:id/status` | Poll scan status |
+| `GET`  | `/api/dupfinder/scan/:id/results` | Fetch scan results |
+| `POST` | `/api/dupfinder/scan/:id/cancel` | Cancel a running scan |
+| `POST` | `/api/organizer/plan` | Create an organisation plan |
+| `POST` | `/api/organizer/execute/:id` | Execute a previewed plan |
+| `POST` | `/api/organizer/cancel/:id` | Cancel a running plan job |
+| `GET`  | `/api/browse` | List directories (in-page browser) |
+| `GET`  | `/api/thumbnail` | Generate a JPEG thumbnail |
+| `GET`  | `/api/system_info` | Report Go/ffmpeg version info |
+
+---
 
 ## License
 
-This project is released under the MIT License and is free to use, modify, and distribute.
+Released under the [MIT License](LICENSE).

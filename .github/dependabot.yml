@@ -3,8 +3,8 @@
 
 version: 2
 updates:
-  # Monitor Python dependencies via pip
-  - package-ecosystem: "pip"
+  # Monitor Go module dependencies
+  - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -12,7 +12,7 @@ updates:
       time: "09:00"
     # Group all minor and patch updates together
     groups:
-      python-dependencies:
+      go-dependencies:
         patterns:
           - "*"
         update-types:
@@ -23,7 +23,7 @@ updates:
     # Add labels for easy filtering
     labels:
       - "dependencies"
-      - "python"
+      - "go"
     # Target the main branch
     target-branch: "main"
 
