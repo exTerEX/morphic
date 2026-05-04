@@ -124,12 +124,22 @@
             <strong id="convBulkCount">0</strong> file(s) selected
         </div>
         <div class="bulk-actions">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
-                Convert to:
+            <!-- Video: three linked dropdowns (shown when video files are selected) -->
+            <div id="convVideoDropdowns" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:13px;color:var(--text-dim);">Container:</span>
+                <select id="convBatchContainer" onchange="convOnBatchContainerChange()" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;"></select>
+                <span style="font-size:13px;color:var(--text-dim);">Codec:</span>
+                <select id="convBatchCodec" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;"></select>
+                <span style="font-size:13px;color:var(--text-dim);">Extension:</span>
+                <select id="convBatchExt" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;"></select>
+            </div>
+            <!-- Image: single format dropdown (shown when image files are selected) -->
+            <div id="convImageDropdown" style="display:none;align-items:center;gap:6px;">
+                <span style="font-size:13px;color:var(--text-dim);">Convert images to:</span>
                 <select id="convBatchTarget" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
-                    <option value="" disabled selected>Loading available targets…</option>
+                    <option value="" disabled selected>Loading…</option>
                 </select>
-            </label>
+            </div>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
                 Show:
                 <select id="convBatchMode" onchange="convUpdateBatchTargets()" title="Choose target set behavior" style="font-size:13px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
@@ -137,7 +147,7 @@
                     <option value="union">All compatible</option>
                 </select>
             </label>
-            <span id="convBatchModeHint" style="font-size:12px;color:var(--text-dim);">Intersection = formats supported by each selected file; Union = any selected file</span>
+            <span id="convBatchModeHint" style="font-size:12px;color:var(--text-dim);">Image formats: common to all selected images</span>
             <button class="btn btn-primary btn-sm" id="convBatchBtn" onclick="convConvertBatch()">🔄 Convert Selected</button>
             <button class="btn btn-danger btn-sm" onclick="convDeleteBatch()">🗑️ Delete Selected</button>
         </div>

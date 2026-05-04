@@ -73,7 +73,9 @@ func handleConverterScan(c *gin.Context) {
 func handleConverterFormats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"image": converter.ImageConversions,
-		"video": converter.VideoConversions,
+		"video": gin.H{
+			"containers": converter.VideoContainers,
+		},
 	})
 }
 
@@ -81,6 +83,7 @@ func handleConverterConvert(c *gin.Context) {
 	var req struct {
 		Files          []string `json:"files"`
 		TargetExt      string   `json:"target_ext"`
+		Codec          string   `json:"codec"`
 		DeleteOriginal bool     `json:"delete_original"`
 		AV1CRF         *int     `json:"av1_crf"`
 	}
@@ -105,12 +108,12 @@ func handleConverterConvert(c *gin.Context) {
 	job.Status = shared.JobStatusRunning
 	conversionStore.Set(job.ID, job)
 
-	go runConversion(job, req.Files, req.TargetExt, req.DeleteOriginal, av1CRF)
+	go runConversion(job, req.Files, req.TargetExt, req.Codec, req.DeleteOriginal, av1CRF)
 
 	c.JSON(http.StatusAccepted, gin.H{"job_id": job.ID})
 }
 
-func runConversion(job *conversionJob, files []string, targetExt string, deleteOriginal bool, av1CRF int) {
+func runConversion(job *conversionJob, files []string, targetExt, codec string, deleteOriginal bool, av1CRF int) {
 	for i, source := range files {
 		// Check for cancellation before each file
 		select {
@@ -134,7 +137,7 @@ func runConversion(job *conversionJob, files []string, targetExt string, deleteO
 			origSize = info.Size()
 		}
 
-		dest, err := converter.ConvertFile(source, targetExt, "", av1CRF)
+		dest, err := converter.ConvertFile(source, targetExt, codec, "", av1CRF)
 		if err != nil {
 			result["destination"] = nil
 			result["status"] = "error"

@@ -12,11 +12,16 @@ let convScanData = null;        // last scan result
 let convFilterType = 'both';    // images|videos|both
 let convFilterExt = null;       // filter by specific extension
 let convSelectedFiles = [];     // files selected for conversion
-let convAvailableTargets = [];  // all targets currently available for batch conversion
+let convAvailableTargets = [];  // image format targets for the image dropdown
 let convAv1Available = false;   // AV1 support from ffmpeg
-let convLastFailedFiles = new Set(); // set of last conversion failures
+let convVideoFormats = [];      // VideoContainerConfig[] from backend
+let convCodecLabels = {         // codec ID → display label
+    h264: 'H.264 (AVC)', h265: 'H.265 (HEVC)',
+    av1: 'AV1', vp8: 'VP8', vp9: 'VP9',
+};
+let convFileResults = new Map();     // path → {status:'ok'|'error'|'converting', ...}
 let convBatchMode = 'intersection';    // union|intersection
-const convAv1Crf = 28;
+const convAv1Crf = 35;
 let convJobId = null;
 let convPollTimer = null;
 let convScanning = false;           // true while folder scan is in flight
@@ -49,25 +54,125 @@ async function convLoadFormats() {
             convAv1Available = false;
         }
 
-        const targets = new Set();
+        // Parse structured video container config
+        convVideoFormats = (data.video && data.video.containers) || [];
+
+        // Collect image format targets for the image dropdown
+        const imagetargets = new Set();
         if (data.image) {
-            Object.values(data.image).flat().forEach(t => targets.add(t));
+            Object.values(data.image).flat().forEach(t => imagetargets.add(t));
         }
-        if (data.video) {
-            Object.values(data.video).flat().forEach(t => targets.add(t));
-        }
+        convAvailableTargets = [...imagetargets].sort();
 
-        if (convAv1Available) {
-            targets.add('.mp4-av1');
-            targets.add('.mkv-av1');
-            targets.add('.webm-av1');
-        }
-
-        convAvailableTargets = [...targets].sort();
+        convInitBatchVideoDropdowns();
         convSetBatchTargets(convAvailableTargets);
     } catch (e) {
         console.error('Failed to load converter formats:', e);
     }
+}
+
+function convInitBatchVideoDropdowns() {
+    const containerSel = document.getElementById('convBatchContainer');
+    if (!containerSel || convVideoFormats.length === 0) return;
+    containerSel.innerHTML = convVideoFormats.map(c =>
+        `<option value="${c.name}">${c.name}</option>`
+    ).join('');
+    convOnBatchContainerChange();
+}
+
+function convOnBatchContainerChange() {
+    const containerSel = document.getElementById('convBatchContainer');
+    const codecSel = document.getElementById('convBatchCodec');
+    const extSel = document.getElementById('convBatchExt');
+    if (containerSel && codecSel && extSel) {
+        convFilterCodecExt(containerSel.value, codecSel, extSel);
+    }
+}
+
+function convFilterCodecExt(containerName, codecSel, extSel) {
+    const container = convVideoFormats.find(c => c.name === containerName);
+    if (!container) return;
+
+    const prevCodec = codecSel.value;
+    const prevExt = extSel.value;
+
+    codecSel.innerHTML = container.codecs.map(codec => {
+        const label = convCodecLabels[codec] || codec.toUpperCase();
+        const disabled = codec === 'av1' && !convAv1Available;
+        return `<option value="${codec}" ${disabled ? 'disabled' : ''}>${label}${disabled ? ' (unavailable)' : ''}</option>`;
+    }).join('');
+
+    if (container.codecs.includes(prevCodec) && !(prevCodec === 'av1' && !convAv1Available)) {
+        codecSel.value = prevCodec;
+    }
+
+    extSel.innerHTML = container.extensions.map(ext =>
+        `<option value="${ext}">${ext}</option>`
+    ).join('');
+
+    if (container.extensions.includes(prevExt)) {
+        extSel.value = prevExt;
+    }
+}
+
+function convGetSelectedByType() {
+    if (!convScanData || !convScanData.files) return { videos: [], images: [] };
+    const selectedSet = new Set(convSelectedFiles);
+    const videos = [], images = [];
+    for (const f of convScanData.files) {
+        if (!selectedSet.has(f.path)) continue;
+        if (f.type === 'video') videos.push(f.path);
+        else images.push(f.path);
+    }
+    return { videos, images };
+}
+
+function convUpdateBatchDropdowns() {
+    const { videos, images } = convGetSelectedByType();
+    const videoDiv = document.getElementById('convVideoDropdowns');
+    const imageDiv = document.getElementById('convImageDropdown');
+
+    if (videoDiv) videoDiv.style.display = videos.length > 0 ? 'flex' : 'none';
+    if (imageDiv) imageDiv.style.display = images.length > 0 ? 'flex' : 'none';
+
+    if (images.length > 0) {
+        const targets = convGetBatchTargets();
+        convSetBatchTargets(targets);
+    }
+
+    const batchBtn = document.getElementById('convBatchBtn');
+    if (batchBtn) {
+        batchBtn.disabled = videos.length === 0 && images.length === 0;
+    }
+}
+
+function convOnRowContainerChange(containerSel) {
+    const group = containerSel.closest('.conv-video-format-group');
+    const codecSel = group.querySelector('.conv-vid-codec');
+    const extSel = group.querySelector('.conv-vid-ext');
+    convFilterCodecExt(containerSel.value, codecSel, extSel);
+}
+
+function convBuildVideoSelectsHtml() {
+    if (convVideoFormats.length === 0) {
+        return `<select class="conv-vid-ext" disabled><option>Loading…</option></select>`;
+    }
+    const first = convVideoFormats[0];
+    const selStyle = 'font-size:12px;padding:3px 6px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;';
+    const containerOpts = convVideoFormats.map(c =>
+        `<option value="${c.name}">${c.name}</option>`
+    ).join('');
+    const codecOpts = first.codecs.map(codec => {
+        const label = convCodecLabels[codec] || codec.toUpperCase();
+        const disabled = codec === 'av1' && !convAv1Available;
+        return `<option value="${codec}" ${disabled ? 'disabled' : ''}>${label}${disabled ? ' (N/A)' : ''}</option>`;
+    }).join('');
+    const extOpts = first.extensions.map(ext => `<option value="${ext}">${ext}</option>`).join('');
+    return `<div class="conv-video-format-group">
+        <select class="conv-vid-container" onchange="convOnRowContainerChange(this)" style="${selStyle}">${containerOpts}</select>
+        <select class="conv-vid-codec" style="${selStyle}">${codecOpts}</select>
+        <select class="conv-vid-ext" style="${selStyle}">${extOpts}</select>
+    </div>`;
 }
 
 // Thumbnail lazy-loading helper
@@ -330,7 +435,7 @@ async function convScan() {
     const folder = document.getElementById('convFolder').value.trim();
     if (!folder) { showToast('Enter a folder path', 'error'); return; }
     _storeFolder('converter', folder);
-    convLastFailedFiles = new Set();
+    convFileResults = new Map();
 
     const includeSubfolders = document.getElementById('convSubfolders').checked;
     const filterType = document.getElementById('convFilterType').value;
@@ -449,6 +554,7 @@ function renderConvResults() {
             <th><label class="checkbox-label"><input type="checkbox" id="convSelectAll" onchange="convToggleAll(this.checked)"> File</label></th>
             <th>Type</th>
             <th>Size</th>
+            <th>Result</th>
             <th>Convert to</th>
             <th></th>
         </tr></thead><tbody>`;
@@ -456,35 +562,45 @@ function renderConvResults() {
     for (const f of files) {
         const thumbUrl = `/api/thumbnail?path=${encodeURIComponent(f.path)}`;
         const displayName = showFullPaths ? f.path : f.name;
-        const failed = convLastFailedFiles.has(f.path);
+        const result = convFileResults.get(f.path);
+        const hasError = result?.status === 'error';
 
-        thtml += `<tr data-path="${escapeAttr(f.path)}" class="${failed ? 'failed-file' : ''}">
+        let resultCell = '<td></td>';
+        if (result) {
+            if (result.status === 'converting') {
+                resultCell = '<td><span class="conv-result"><span class="result-converting">Converting…</span></span></td>';
+            } else if (result.status === 'ok') {
+                const pct = result.original_size > 0
+                    ? Math.round((1 - result.new_size / result.original_size) * 100) : 0;
+                const sign = pct >= 0 ? '−' : '+';
+                resultCell = `<td><span class="conv-result"><span class="status-ok">✓</span> <span class="size-change">${result.original_size_fmt} → ${result.new_size_fmt} (${sign}${Math.abs(pct)}%)</span></span></td>`;
+            } else if (result.status === 'error') {
+                const short = escapeHtml((result.error || 'unknown').slice(0, 80));
+                resultCell = `<td><span class="conv-result"><span class="status-err" title="${escapeAttr(result.error || '')}">✗ ${short}</span></span></td>`;
+            }
+        }
+
+        thtml += `<tr data-path="${escapeAttr(f.path)}" class="${hasError ? 'failed-file' : ''}">
             <td><img data-src="${thumbUrl}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" class="file-thumb" loading="lazy" decoding="async" onclick="openPreview('${escapeAttr(f.path)}', '${f.type}')" onerror="this.style.display='none'" /></td>
             <td>
                 <label class="checkbox-label">
                     <input type="checkbox" class="conv-check" value="${escapeAttr(f.path)}" onchange="convUpdateSelection()">
                     <span class="file-name" title="${escapeAttr(f.path)}" onclick="copyPath('${escapeAttr(f.path)}')">${escapeHtml(displayName)}</span>
                 </label>
-                ${failed ? '<span class="failed-badge">Failed</span>' : ''}
             </td>
             <td>${f.ext}</td>
             <td>${formatBytes(f.size)}</td>
+            ${resultCell}
             <td>
-                <select class="conv-target" style="font-size:12px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
-                    ${[...new Set([...f.targets, ...(f.type === 'video' ? ['.mp4-av1', '.mkv-av1', '.webm-av1'] : [])])]
-                        .map(t => {
-                            const isAv1 = t.endsWith('-av1');
-                            const disabled = isAv1 && !convAv1Available;
-                            const label = isAv1 && !convAv1Available
-                                ? `${t} (AV1 unavailable)`
-                                : t;
-                            return `<option value="${t}" ${disabled ? 'disabled' : ''}>${label}</option>`;
-                        }).join('')}
-                </select>
+                ${f.type === 'video'
+                    ? convBuildVideoSelectsHtml()
+                    : `<select class="conv-target" style="font-size:12px;padding:4px 8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+                    ${(f.targets || []).map(t => `<option value="${t}">${t}</option>`).join('')}
+                </select>`}
             </td>
             <td>
                 <button class="btn btn-sm btn-ghost" onclick="convConvertSingle('${escapeAttr(f.path)}', this)">Convert</button>
-                ${failed ? `<button class="btn btn-sm btn-warning" onclick="convRetrySingle('${escapeAttr(f.path)}', this)">Retry</button>` : ''}
+                ${hasError ? `<button class="btn btn-sm btn-warning" onclick="convRetrySingle('${escapeAttr(f.path)}', this)">Retry</button>` : ''}
                 <button class="btn btn-sm btn-ghost" style="color:var(--danger)" onclick="convDeleteSingle('${escapeAttr(f.path)}')">✕</button>
             </td>
         </tr>`;
@@ -493,11 +609,12 @@ function renderConvResults() {
     thtml += '</tbody></table>';
     table.innerHTML = thtml;
     observeThumbnails(table);
-    convUpdateBatchTargets();
+    convUpdateBatchDropdowns();
 }
 
 function convSetBatchTargets(targets) {
     const select = document.getElementById('convBatchTarget');
+    if (!select) return;
     const prevValue = select.value;
 
     const targetArray = Array.isArray(targets) ? targets.filter(Boolean) : [];
@@ -508,7 +625,7 @@ function convSetBatchTargets(targets) {
         select.disabled = true;
         const opt = document.createElement('option');
         opt.value = '';
-        opt.textContent = 'No compatible target formats';
+        opt.textContent = 'No compatible image formats';
         opt.disabled = true;
         select.appendChild(opt);
         return;
@@ -533,60 +650,49 @@ function convGetBatchTargets() {
     const selectedFilePaths = new Set(convSelectedFiles || []);
     const modeSelect = document.getElementById('convBatchMode');
     if (modeSelect) {
-        convBatchMode = modeSelect.value || 'union';
+        convBatchMode = modeSelect.value || 'intersection';
         localStorage.setItem('convBatchMode', convBatchMode);
     }
 
     const modeHint = document.getElementById('convBatchModeHint');
     if (modeHint) {
         modeHint.textContent = convBatchMode === 'intersection'
-            ? 'Intersection = formats supported by each selected file; Union = any selected file'
-            : 'Union = formats supported by at least one selected file; Intersection = common to all';
+            ? 'Image formats: common to all selected images'
+            : 'Image formats: supported by any selected image';
     }
 
-    // If no scan data yet, show global format list from converter/formats.
+    // Only image files contribute to the image format dropdown
     if (!convScanData || !convScanData.files || convScanData.files.length === 0) {
         return [...new Set(convAvailableTargets)].sort();
     }
 
-    const files = convScanData.files.filter(f => selectedFilePaths.size === 0 || selectedFilePaths.has(f.path));
-    if (files.length === 0) {
+    const imageFiles = convScanData.files.filter(f =>
+        f.type === 'image' && (selectedFilePaths.size === 0 || selectedFilePaths.has(f.path))
+    );
+
+    if (imageFiles.length === 0) {
         return [...new Set(convAvailableTargets)].sort();
     }
 
-    const hasVideo = files.some(f => f.type === 'video');
-    const fileTargets = files.map(f => new Set((f.targets || []).map(t => t.toLowerCase())));
+    const fileTargets = imageFiles.map(f => new Set((f.targets || []).map(t => t.toLowerCase())));
 
     if (convBatchMode === 'intersection') {
         let intersection = new Set(fileTargets[0]);
         for (let i = 1; i < fileTargets.length; i++) {
             intersection = new Set([...intersection].filter(t => fileTargets[i].has(t)));
         }
-        if (hasVideo) {
-            ['.mp4-av1', '.mkv-av1', '.webm-av1'].forEach(v => intersection.add(v));
-        }
         return [...intersection].sort();
     }
 
-    // union
     const union = new Set();
     for (const targetSet of fileTargets) {
         for (const t of targetSet) union.add(t);
-    }
-    if (hasVideo) {
-        ['.mp4-av1', '.mkv-av1', '.webm-av1'].forEach(v => union.add(v));
     }
     return [...union].sort();
 }
 
 function convUpdateBatchTargets() {
-    const targets = convGetBatchTargets();
-    convSetBatchTargets(targets);
-
-    const batchBtn = document.getElementById('convBatchBtn');
-    if (batchBtn) {
-        batchBtn.disabled = !targets || targets.length === 0;
-    }
+    convUpdateBatchDropdowns();
 }
 
 function convSetExtFilter(ext) {
@@ -613,7 +719,7 @@ function convUpdateSelection() {
         bar.style.display = 'none';
     }
 
-    convUpdateBatchTargets();
+    convUpdateBatchDropdowns();
 }
 
 function toggleFullPaths() {
@@ -627,30 +733,41 @@ function toggleFullPaths() {
 
 async function convConvertSingle(filePath, btnEl) {
     const row = btnEl.closest('tr');
-    const targetSelect = row.querySelector('.conv-target');
-    const targetExt = targetSelect.value;
     const deleteOrig = document.getElementById('convDeleteOrig').checked;
+
+    let targetExt, codec;
+    const videoContainer = row.querySelector('.conv-vid-container');
+    if (videoContainer) {
+        targetExt = row.querySelector('.conv-vid-ext').value;
+        codec = row.querySelector('.conv-vid-codec').value;
+    } else {
+        targetExt = row.querySelector('.conv-target').value;
+    }
 
     btnEl.disabled = true;
     btnEl.textContent = '...';
 
     try {
+        const body = {
+            files: [filePath],
+            target_ext: targetExt,
+            delete_original: deleteOrig,
+            av1_crf: convAv1Crf,
+        };
+        if (codec) body.codec = codec;
+
         const resp = await fetch('/api/converter/convert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                files: [filePath],
-                target_ext: targetExt,
-                delete_original: deleteOrig,
-                av1_crf: convAv1Crf,
-            }),
+            body: JSON.stringify(body),
         });
         const data = await resp.json();
         if (data.job_id) {
             await convWaitForJob(data.job_id);
         }
     } catch (e) {
-        showToast('Convert failed: ' + e.message, 'error');
+        convFileResults.set(filePath, { status: 'error', error: e.message });
+        renderConvResults();
     } finally {
         btnEl.disabled = false;
         btnEl.textContent = 'Convert';
@@ -659,34 +776,63 @@ async function convConvertSingle(filePath, btnEl) {
 
 async function convConvertBatch() {
     if (convSelectedFiles.length === 0) return;
-    const targetExt = document.getElementById('convBatchTarget').value;
-    if (!targetExt) {
-        showToast('No valid target format available for selected files', 'error');
-        return;
-    }
+    const { videos, images } = convGetSelectedByType();
     const deleteOrig = document.getElementById('convDeleteOrig').checked;
 
     document.getElementById('convBatchBtn').disabled = true;
 
     try {
-        const resp = await fetch('/api/converter/convert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                files: convSelectedFiles,
-                target_ext: targetExt,
-                delete_original: deleteOrig,
-                av1_crf: convAv1Crf,
-            }),
-        });
-        const data = await resp.json();
-        if (data.job_id) {
-            convConvertJobId = data.job_id;
-            convShowProgress();
-            convPollProgress(data.job_id);
+        if (videos.length > 0) {
+            const targetExt = document.getElementById('convBatchExt').value;
+            const codec = document.getElementById('convBatchCodec').value;
+            if (!targetExt || !codec) {
+                showToast('Please select a video format', 'error');
+                return;
+            }
+            const resp = await fetch('/api/converter/convert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    files: videos,
+                    target_ext: targetExt,
+                    codec,
+                    delete_original: deleteOrig,
+                    av1_crf: convAv1Crf,
+                }),
+            });
+            const data = await resp.json();
+            if (data.job_id) {
+                convConvertJobId = data.job_id;
+                convShowProgress();
+                await convPollProgress(data.job_id);
+            }
+        }
+
+        if (images.length > 0) {
+            const targetExt = document.getElementById('convBatchTarget').value;
+            if (!targetExt) {
+                showToast('No valid image target format selected', 'error');
+            } else {
+                const resp = await fetch('/api/converter/convert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        files: images,
+                        target_ext: targetExt,
+                        delete_original: deleteOrig,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.job_id) {
+                    convConvertJobId = data.job_id;
+                    convShowProgress();
+                    await convPollProgress(data.job_id);
+                }
+            }
         }
     } catch (e) {
         showToast('Batch convert failed: ' + e.message, 'error');
+    } finally {
         document.getElementById('convBatchBtn').disabled = false;
     }
 }
@@ -698,35 +844,65 @@ function convShowProgress() {
 }
 
 function convPollProgress(jobId) {
-    let lastCompleted = -1;
-    convPollTimer = setInterval(async () => {
-        try {
-            const resp = await fetch(`/api/converter/progress/${jobId}/poll?last=${lastCompleted}`);
-            const data = await resp.json();
-            if (data.error) return;
+    return new Promise(resolve => {
+        let lastCompleted = -1;
+        convPollTimer = setInterval(async () => {
+            try {
+                const resp = await fetch(`/api/converter/progress/${jobId}/poll?last=${lastCompleted}`);
+                const data = await resp.json();
+                if (data.error) return;
 
-            lastCompleted = data.completed;
-            const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
-            document.getElementById('convProgressBar').style.width = pct + '%';
-            document.getElementById('convProgressPct').textContent = pct + '%';
-            document.getElementById('convProgressMsg').textContent =
-                data.current_file ? `Converting: ${data.current_file}` : 'Processing...';
+                lastCompleted = data.completed;
+                const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+                document.getElementById('convProgressBar').style.width = pct + '%';
+                document.getElementById('convProgressPct').textContent = pct + '%';
+                document.getElementById('convProgressMsg').textContent =
+                    data.current_file ? `Converting: ${data.current_file}` : 'Processing...';
 
-            if (data.status === 'done') {
-                clearInterval(convPollTimer);
-                convShowConversionResults(data);
-                document.getElementById('convProgress').classList.remove('active');
-                document.getElementById('convBatchBtn').disabled = false;
-                convConvertJobId = null;
-            } else if (data.status === 'cancelled') {
-                clearInterval(convPollTimer);
-                document.getElementById('convProgress').classList.remove('active');
-                document.getElementById('convBatchBtn').disabled = false;
-                convConvertJobId = null;
-                showToast('Conversion was stopped', 'warning');
-            }
-        } catch (e) { /* retry */ }
-    }, 500);
+                _convSyncResults(data);
+
+                if (data.status === 'done') {
+                    clearInterval(convPollTimer);
+                    document.getElementById('convProgress').classList.remove('active');
+                    convConvertJobId = null;
+                    resolve('done');
+                } else if (data.status === 'cancelled') {
+                    clearInterval(convPollTimer);
+                    document.getElementById('convProgress').classList.remove('active');
+                    convConvertJobId = null;
+                    showToast('Conversion was stopped', 'warning');
+                    resolve('cancelled');
+                }
+            } catch (e) { /* retry */ }
+        }, 500);
+    });
+}
+
+// Sync convFileResults from a job poll/progress response and re-render the table.
+function _convSyncResults(data) {
+    for (const r of data.results || []) {
+        const existing = convFileResults.get(r.source);
+        if (existing && existing.status !== 'converting') continue; // already finalised
+        if (r.status === 'ok') {
+            convFileResults.set(r.source, {
+                status: 'ok',
+                original_size_fmt: r.original_size_fmt,
+                new_size_fmt: r.new_size_fmt,
+                original_size: r.original_size,
+                new_size: r.new_size,
+            });
+        } else {
+            convFileResults.set(r.source, { status: 'error', error: r.error || 'unknown' });
+        }
+    }
+    // Keep at most one 'converting' marker (the current file)
+    for (const [path, res] of convFileResults) {
+        if (res.status === 'converting') convFileResults.delete(path);
+    }
+    if (data.current_file && !convFileResults.has(data.current_file)) {
+        convFileResults.set(data.current_file, { status: 'converting' });
+    }
+    renderConvResults();
 }
 
 async function convStopConvert() {
@@ -748,12 +924,15 @@ async function convWaitForJob(jobId) {
         if (data.status === 'done') {
             const r = data.results[0];
             if (r.status === 'ok') {
-                const sizeInfo = r.original_size_fmt + ' → ' + r.new_size_fmt;
-                showToast(`Converted! (${sizeInfo})`, 'success');
-                convLastFailedFiles.delete(r.source);
+                convFileResults.set(r.source, {
+                    status: 'ok',
+                    original_size_fmt: r.original_size_fmt,
+                    new_size_fmt: r.new_size_fmt,
+                    original_size: r.original_size,
+                    new_size: r.new_size,
+                });
             } else {
-                showToast('Error: ' + (r.error || 'unknown'), 'error');
-                convLastFailedFiles.add(r.source);
+                convFileResults.set(r.source, { status: 'error', error: r.error || 'unknown' });
             }
             renderConvResults();
             return;
@@ -764,9 +943,16 @@ async function convWaitForJob(jobId) {
 
 async function convRetrySingle(filePath, btnEl) {
     const row = btnEl.closest('tr');
-    const targetSelect = row.querySelector('.conv-target');
-    const targetExt = targetSelect?.value;
     const deleteOrig = document.getElementById('convDeleteOrig').checked;
+
+    let targetExt, codec;
+    const videoContainer = row.querySelector('.conv-vid-container');
+    if (videoContainer) {
+        targetExt = row.querySelector('.conv-vid-ext').value;
+        codec = row.querySelector('.conv-vid-codec').value;
+    } else {
+        targetExt = row.querySelector('.conv-target')?.value;
+    }
 
     if (!targetExt) {
         showToast('No target selected for retry', 'error');
@@ -777,17 +963,21 @@ async function convRetrySingle(filePath, btnEl) {
     btnEl.textContent = 'Retrying...';
 
     try {
+        const body = { files: [filePath], target_ext: targetExt, delete_original: deleteOrig, av1_crf: convAv1Crf };
+        if (codec) body.codec = codec;
+
         const resp = await fetch('/api/converter/convert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ files: [filePath], target_ext: targetExt, delete_original: deleteOrig, av1_crf: convAv1Crf }),
+            body: JSON.stringify(body),
         });
         const data = await resp.json();
         if (data.job_id) {
             await convWaitForJob(data.job_id);
         }
     } catch (e) {
-        showToast('Retry failed: ' + e.message, 'error');
+        convFileResults.set(filePath, { status: 'error', error: e.message });
+        renderConvResults();
     } finally {
         btnEl.disabled = false;
         btnEl.textContent = 'Retry';
@@ -795,29 +985,8 @@ async function convRetrySingle(filePath, btnEl) {
 }
 
 function convShowConversionResults(data) {
-    let ok = 0, fail = 0;
-    const failedFiles = [];
-    convLastFailedFiles = new Set();
-
-    for (const r of data.results) {
-        if (r.status === 'ok') {
-            ok++;
-        } else {
-            fail++;
-            failedFiles.push(`${r.source} (${r.error || 'unknown error'})`);
-        }
-    }
-
-        if (fail > 0) {
-        const feed = failedFiles.slice(0, 5).join(', ');
-        const rest = failedFiles.length > 5 ? `, +${failedFiles.length - 5} more` : '';
-        showToast(`Done! ${ok} converted, ${fail} failed: ${feed}${rest}`, 'error');
-    } else {
-        showToast(`Done! ${ok} converted`, 'success');
-    }
-
-    // Refresh list with failure markers
-    renderConvResults();
+    // results are already synced live via _convSyncResults during polling;
+    // this is kept as a no-op hook for any future post-completion logic.
 }
 
 async function convDeleteSingle(filePath) {

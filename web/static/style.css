@@ -418,6 +418,17 @@ input[type="range"] {
 
 /* ── Converter Results ───────────────────────────────────────────── */
 
+.conv-video-format-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.conv-video-format-group select {
+    min-width: 70px;
+}
+
 .conv-result {
     display: flex;
     align-items: center;
@@ -427,12 +438,25 @@ input[type="range"] {
     font-size: 13px;
 }
 
+/* Inside table cells the list-style padding/border is not needed */
+td .conv-result {
+    padding: 0;
+    border-bottom: none;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
 .conv-result .status-ok { color: var(--success); }
-.conv-result .status-err { color: var(--danger); }
+.conv-result .status-err { color: var(--danger); cursor: help; }
 
 .conv-result .size-change {
     font-size: 12px;
     color: var(--text-dim);
+}
+
+.result-converting {
+    color: var(--text-dim);
+    font-style: italic;
 }
 
 /* ── Dupfinder Results ───────────────────────────────────────────── */
