@@ -48,7 +48,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-heif = ["pillow-heif>=0.13.0"]
+heif = ["pillow>=12.2.0"]
 gpu = [
     "torch>=2.2.0,<3.0.0; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version >= '3.10' and python_version < '3.12'",
     "cupy-cuda11x==13.6.0; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version >= '3.10' and python_version < '3.12'",
