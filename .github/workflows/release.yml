@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version components
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          MAJOR=$(echo "$TAG" | cut -d. -f1 | tr -d 'v')
+          MINOR=$(echo "$TAG" | cut -d. -f2)
+          PATCH=$(echo "$TAG" | cut -d. -f3)
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+          if [[ "$MINOR" == "0" && "$PATCH" == "0" ]]; then
+            echo "is_major=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "is_major=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build commit changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [[ -n "$PREV_TAG" ]]; then
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.txt
+          else
+            git log --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.txt
+          fi
+
+      - name: Generate AI release notes
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          CHANGELOG=$(cat /tmp/changelog.txt)
+
+          # Build the request payload safely via jq so commit messages are properly escaped
+          jq -n \
+            --arg model "gpt-4o-mini" \
+            --arg system "You are a technical writer generating GitHub release notes for Morphic, a Go-based local media management tool with an image/video converter, perceptual duplicate finder, and a date/rename-based file organizer. Write concise, user-friendly release notes in markdown. Group changes under headers such as '## New Features', '## Bug Fixes', '## Improvements', and '## Other Changes'. Omit empty sections. Do not invent changes that are not present in the commit list." \
+            --arg user "Generate release notes for ${TAG} based on these git commits:\n\n${CHANGELOG}" \
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], max_tokens: 1024}' \
+            > /tmp/ai_request.json
+
+          RESPONSE=$(curl --silent \
+            -X POST "https://models.inference.ai.azure.com/chat/completions" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/ai_request.json) || true
+
+          NOTES=$(printf '%s' "$RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
+
+          if [[ -z "$NOTES" ]]; then
+            # Fallback: plain changelog when the AI call is unavailable
+            printf '## Changes in %s\n\n%s\n' "$TAG" "$CHANGELOG" > /tmp/release_notes.txt
+          else
+            printf '%s\n' "$NOTES" > /tmp/release_notes.txt
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Morphic ${{ steps.version.outputs.tag }}"
+          body_path: /tmp/release_notes.txt
+          draft: false
+          prerelease: false
+
+      - name: Create release branch for major version
+        if: steps.version.outputs.is_major == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="release/v${{ steps.version.outputs.major }}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"

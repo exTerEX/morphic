@@ -2,20 +2,22 @@ name: Continuous integration
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: 
+      - main
+      - develop
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/CI.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/CI.yml'
 
 jobs:
@@ -24,30 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11']
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - name: Install ffmpeg and tkinter (Ubuntu)
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg python3-tk
-
-    - name: Set up UV
-      uses: astral-sh/setup-uv@v7
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install the project dependencies
-      run: uv sync --locked --all-extras --dev
-
-    - name: Run tests
-      run: |
-        uv run pytest
-
-  coverage:
-    runs-on: ubuntu-latest
+        go-version: ['1.22']
 
     steps:
     - uses: actions/checkout@v6
@@ -55,39 +34,62 @@ jobs:
     - name: Install ffmpeg
       run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-    - name: Set up UV
-      uses: astral-sh/setup-uv@v7
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
 
-    - name: Install the project dependencies
-      run: uv sync --locked --all-extras --dev
+    - name: Download dependencies
+      run: go mod download
 
     - name: Run tests
-      run: |
-        uv run pytest --cov=morphic --cov-report=xml
+      run: go test ./...
+
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install ffmpeg
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run tests with coverage
+      run: go test -coverprofile=coverage.out ./...
+
+    - name: Convert coverage to lcov
+      run: go tool cover -html=coverage.out -o coverage.html
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v6
+      uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         slug: exTerEX/morphic
         fail_ci_if_error: true
-        files: ./coverage.xml
+        files: ./coverage.out
         flags: unittests
         verbose: true
 
-  syntax-check:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - name: Set up UV
-        uses: astral-sh/setup-uv@v7
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
-      - name: Install the project dependencies
-        run: uv sync --locked --all-extras --dev
+      - name: Run go vet
+        run: go vet ./...
 
-      - name: Run Ruff format
-        run: uv run ruff format --check
-
-      - name: Run Ruff linter
-        run: uv run ruff check --output-format=github .
+      - name: Build
+        run: go build ./...
