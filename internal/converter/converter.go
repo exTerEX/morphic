@@ -124,12 +124,37 @@ func getVideoEncoder(codec string) (string, error) {
 	return "", fmt.Errorf("unknown codec: %s", codec)
 }
 
+func validateImageTargetExt(targetExt string) (string, error) {
+	if targetExt == "" {
+		return "", fmt.Errorf("invalid target extension")
+	}
+	if strings.Contains(targetExt, "\x00") || strings.ContainsAny(targetExt, `/\`) || strings.Contains(targetExt, "..") {
+		return "", fmt.Errorf("invalid target extension")
+	}
+	for _, r := range targetExt {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("invalid target extension")
+		}
+	}
+
+	ext := shared.NormaliseExt(normaliseTargetExt(targetExt))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp", ".avif":
+		return ext, nil
+	default:
+		return "", fmt.Errorf("unsupported target extension: %s", targetExt)
+	}
+}
+
 // ConvertImage converts an image file using the imaging library.
 func ConvertImage(source, targetExt, outputDir string) (string, error) {
 	if !filepath.IsAbs(source) || strings.Contains(source, "\x00") {
 		return "", fmt.Errorf("invalid source path")
 	}
-	ext := shared.NormaliseExt(normaliseTargetExt(targetExt))
+	ext, err := validateImageTargetExt(targetExt)
+	if err != nil {
+		return "", err
+	}
 
 	stem := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
 	var dest string
