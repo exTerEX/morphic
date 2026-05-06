@@ -49,7 +49,7 @@ func handleConverterScan(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Folder == "" || !isDir(req.Folder) || !isSafePath(req.Folder) {
+	if req.Folder == "" || !isSafePath(req.Folder) || !isDir(req.Folder) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder: " + req.Folder})
 		return
 	}
