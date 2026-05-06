@@ -20,6 +20,9 @@ on:
       - 'go.sum'
       - '.github/workflows/CI.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
