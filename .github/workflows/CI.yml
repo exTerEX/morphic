@@ -2,7 +2,7 @@ name: Continuous integration
 
 on:
   push:
-    branches: 
+    branches:
       - main
       - develop
     paths:
@@ -20,24 +20,32 @@ on:
       - 'go.sum'
       - '.github/workflows/CI.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        go-version: ['1.22']
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v6
 
+    - name: Cache apt packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-ffmpeg-${{ runner.os }}
+
     - name: Install ffmpeg
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
 
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version-file: go.mod
+        cache: true
 
     - name: Download dependencies
       run: go mod download
@@ -47,17 +55,26 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v6
 
+    - name: Cache apt packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-ffmpeg-${{ runner.os }}
+
     - name: Install ffmpeg
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
 
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.22'
+        go-version-file: go.mod
+        cache: true
 
     - name: Download dependencies
       run: go mod download
@@ -80,13 +97,16 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version-file: go.mod
+          cache: true
 
       - name: Run go vet
         run: go vet ./...
