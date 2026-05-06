@@ -2,7 +2,7 @@ name: Continuous integration
 
 on:
   push:
-    branches: 
+    branches:
       - main
       - develop
     paths:
@@ -32,13 +32,20 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
+    - name: Cache apt packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-ffmpeg-${{ runner.os }}
+
     - name: Install ffmpeg
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
 
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
+        cache: true
 
     - name: Download dependencies
       run: go mod download
@@ -54,13 +61,20 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
+    - name: Cache apt packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-ffmpeg-${{ runner.os }}
+
     - name: Install ffmpeg
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
 
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
+        cache: true
 
     - name: Download dependencies
       run: go mod download
@@ -92,6 +106,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Run go vet
         run: go vet ./...
