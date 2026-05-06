@@ -126,6 +126,9 @@ func getVideoEncoder(codec string) (string, error) {
 
 // ConvertImage converts an image file using the imaging library.
 func ConvertImage(source, targetExt, outputDir string) (string, error) {
+	if !filepath.IsAbs(source) || strings.Contains(source, "\x00") {
+		return "", fmt.Errorf("invalid source path")
+	}
 	ext := shared.NormaliseExt(normaliseTargetExt(targetExt))
 
 	stem := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
@@ -215,6 +218,9 @@ func convertImageByFFmpeg(source, dest, ext string) (string, error) {
 // ConvertVideo converts a video file using ffmpeg.
 // codec is one of: h264, h265, av1, vp8, vp9. Defaults to h264 when empty.
 func ConvertVideo(source, targetExt, codec, outputDir string, av1CRF int) (string, error) {
+	if !filepath.IsAbs(source) || strings.Contains(source, "\x00") {
+		return "", fmt.Errorf("invalid source path")
+	}
 	candidates := ffmpegCandidates()
 	if len(candidates) == 0 {
 		return "", fmt.Errorf("ffmpeg is not installed or not on PATH")

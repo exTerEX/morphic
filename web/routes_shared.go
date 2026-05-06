@@ -32,6 +32,10 @@ func handleBrowseDirectory(c *gin.Context) {
 	}
 
 	path = filepath.Clean(path)
+	if !isSafePath(path) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid path"})
+		return
+	}
 	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not a directory"})
@@ -109,6 +113,12 @@ func handleThumbnail(c *gin.Context) {
 	var data []byte
 	var err error
 
+	path = filepath.Clean(path)
+	if !isSafePath(path) {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
 	if shared.IsVideoFile(path) {
 		data, err = shared.GenerateVideoThumbnail(path, shared.DefaultThumbnailSize)
 	} else {
@@ -172,6 +182,10 @@ func handleMedia(c *gin.Context) {
 	}
 
 	filePath = filepath.Clean(filePath)
+	if !isSafePath(filePath) {
+		c.Status(http.StatusBadRequest)
+		return
+	}
 	info, err := os.Stat(filePath)
 	if err != nil || info.IsDir() {
 		c.Status(http.StatusNotFound)
@@ -197,6 +211,11 @@ func handleMedia(c *gin.Context) {
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// isSafePath rejects relative paths and paths containing null bytes.
+func isSafePath(p string) bool {
+	return filepath.IsAbs(p) && !strings.Contains(p, "\x00")
 }
 
 // round1 rounds f to one decimal place.

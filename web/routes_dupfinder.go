@@ -32,7 +32,7 @@ func handleDupfinderScan(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Folder == "" || !isDir(req.Folder) {
+	if req.Folder == "" || !isDir(req.Folder) || !isSafePath(req.Folder) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder: " + req.Folder})
 		return
 	}
@@ -132,6 +132,10 @@ func handleDupfinderDelete(c *gin.Context) {
 	totalFreed := int64(0)
 
 	for _, fp := range req.Files {
+		if !isSafePath(fp) {
+			results = append(results, map[string]interface{}{"path": fp, "status": "not_found"})
+			continue
+		}
 		info, err := os.Stat(fp)
 		if err != nil {
 			results = append(results, map[string]interface{}{"path": fp, "status": "not_found"})
