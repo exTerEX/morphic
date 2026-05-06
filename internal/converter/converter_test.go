@@ -198,3 +198,33 @@ func TestVideoConversions_nonEmpty(t *testing.T) {
 		t.Error("VideoConversions is empty")
 	}
 }
+
+// ── Input validation ─────────────────────────────────────────────────────────
+
+func TestConvertImage_relativePath(t *testing.T) {
+	_, err := converter.ConvertImage("relative/path/image.jpg", ".png", "")
+	if err == nil {
+		t.Error("expected error for relative source path, got nil")
+	}
+}
+
+func TestConvertImage_nullBytePath(t *testing.T) {
+	_, err := converter.ConvertImage("/valid/path/image\x00.jpg", ".png", "")
+	if err == nil {
+		t.Error("expected error for source path containing NUL byte, got nil")
+	}
+}
+
+func TestConvertVideo_relativePath(t *testing.T) {
+	_, err := converter.ConvertVideo("relative/path/video.mp4", ".mkv", "", "", 0)
+	if err == nil {
+		t.Error("expected error for relative source path, got nil")
+	}
+}
+
+func TestConvertVideo_nullBytePath(t *testing.T) {
+	_, err := converter.ConvertVideo("/valid/path/video\x00.mp4", ".mkv", "", "", 0)
+	if err == nil {
+		t.Error("expected error for source path containing NUL byte, got nil")
+	}
+}

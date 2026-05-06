@@ -63,11 +63,12 @@ func probeVideoBitrate(source, ffmpegBin string) int64 {
 	if _, err := exec.LookPath(probeBin); err != nil {
 		return 0
 	}
+	src := pathForBin(probeBin, source)
 	out, err := exec.Command(probeBin,
 		"-v", "quiet",
 		"-show_entries", "format=bit_rate",
 		"-of", "default=noprint_wrappers=1",
-		source).Output()
+		src).Output()
 	if err != nil {
 		return 0
 	}
@@ -144,6 +145,36 @@ func validateImageTargetExt(targetExt string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported target extension: %s", targetExt)
 	}
+}
+
+func validateVideoTargetExt(targetExt string) (string, error) {
+	if targetExt == "" {
+		return "", fmt.Errorf("invalid target extension")
+	}
+	if strings.Contains(targetExt, "\x00") || strings.ContainsAny(targetExt, `/\`) || strings.Contains(targetExt, "..") {
+		return "", fmt.Errorf("invalid target extension")
+	}
+	for _, r := range targetExt {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("invalid target extension")
+		}
+	}
+
+	ext := shared.NormaliseExt(normaliseTargetExt(targetExt))
+	if _, ok := canonicalVideo[ext]; ok {
+		return ext, nil
+	}
+	return "", fmt.Errorf("unsupported target extension: %s", targetExt)
+}
+
+// IsValidTargetExt reports whether ext is a recognised image or video output extension.
+func IsValidTargetExt(ext string) bool {
+	_, imgErr := validateImageTargetExt(ext)
+	if imgErr == nil {
+		return true
+	}
+	_, vidErr := validateVideoTargetExt(ext)
+	return vidErr == nil
 }
 
 // ConvertImage converts an image file using the imaging library.
@@ -252,7 +283,10 @@ func ConvertVideo(source, targetExt, codec, outputDir string, av1CRF int) (strin
 	}
 	bin := candidates[0]
 
-	ext := normaliseTargetExt(targetExt)
+	ext, err := validateVideoTargetExt(targetExt)
+	if err != nil {
+		return "", err
+	}
 
 	stem := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
 	var dest string
@@ -278,7 +312,7 @@ func ConvertVideo(source, targetExt, codec, outputDir string, av1CRF int) (strin
 		return "", err
 	}
 
-	cmd := []string{bin, "-y", "-i", source, "-c:v", encoder, "-c:a", "aac"}
+	cmd := []string{bin, "-y", "-i", pathForBin(bin, source), "-c:v", encoder, "-c:a", "aac"}
 
 	isAV1 := encoder == "libsvtav1" || encoder == "libaom-av1"
 	if isAV1 {
@@ -320,7 +354,7 @@ func ConvertVideo(source, targetExt, codec, outputDir string, av1CRF int) (strin
 		}
 	}
 
-	cmd = append(cmd, dest)
+	cmd = append(cmd, pathForBin(bin, dest))
 
 	out, err2 := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
 	if err2 != nil {

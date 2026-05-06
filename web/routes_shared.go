@@ -32,7 +32,7 @@ func handleBrowseDirectory(c *gin.Context) {
 	}
 
 	path = filepath.Clean(path)
-	if !isSafePath(path) {
+	if !isAbsPath(path) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid path"})
 		return
 	}
@@ -114,7 +114,7 @@ func handleThumbnail(c *gin.Context) {
 	var err error
 
 	path = filepath.Clean(path)
-	if !isSafePath(path) {
+	if !isAbsPath(path) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
@@ -182,7 +182,7 @@ func handleMedia(c *gin.Context) {
 	}
 
 	filePath = filepath.Clean(filePath)
-	if !isSafePath(filePath) {
+	if !isAbsPath(filePath) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
@@ -213,8 +213,9 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// isSafePath rejects relative paths and paths containing null bytes.
-func isSafePath(p string) bool {
+// isAbsPath rejects relative paths and paths containing null bytes.
+// It does not enforce any allowlisted root directory.
+func isAbsPath(p string) bool {
 	return filepath.IsAbs(p) && !strings.Contains(p, "\x00")
 }
 

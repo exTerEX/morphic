@@ -49,7 +49,7 @@ func handleConverterScan(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Folder == "" || !isSafePath(req.Folder) || !isDir(req.Folder) {
+	if req.Folder == "" || !isAbsPath(req.Folder) || !isDir(req.Folder) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder: " + req.Folder})
 		return
 	}
@@ -95,8 +95,12 @@ func handleConverterConvert(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "files and target_ext required"})
 		return
 	}
+	if !converter.IsValidTargetExt(req.TargetExt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported or invalid target_ext: " + req.TargetExt})
+		return
+	}
 	for _, f := range req.Files {
-		if !isSafePath(f) {
+		if !isAbsPath(f) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file path: " + f})
 			return
 		}
@@ -254,7 +258,7 @@ func handleConverterDelete(c *gin.Context) {
 	totalFreed := int64(0)
 
 	for _, fp := range req.Files {
-		if !isSafePath(fp) {
+		if !isAbsPath(fp) {
 			results = append(results, map[string]interface{}{"path": fp, "status": "not_found"})
 			continue
 		}
